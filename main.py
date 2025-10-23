@@ -1,4 +1,4 @@
-# .\PycharmProjects\Xero Payroll\main.py
+# main.py
 
 from datetime import date, timedelta
 from xero_payroll.api import xero_api_client

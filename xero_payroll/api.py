@@ -1,4 +1,4 @@
-# .\Xero Payroll\xero_payroll\api.py
+# api.py
 
 import os
 import json

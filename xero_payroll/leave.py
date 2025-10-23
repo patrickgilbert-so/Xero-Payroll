@@ -1,4 +1,4 @@
-# g:\Users\gilbe\PycharmProjects\Xero Payroll\xero_payroll\leave.py
+# leave.py
 
 from datetime import date
 from .api import xero_api_client

@@ -1,4 +1,4 @@
-# g:\Users\gilbe\PycharmProjects\Xero Payroll\xero_payroll\utils.py
+# utils.py
 
 from datetime import date, timedelta
 

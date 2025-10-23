@@ -131,6 +131,35 @@ class XeroAPI:
         response.raise_for_status()
         return response.json()
 
+    def list_employees(self):
+        """
+        Retrieves a list of all employees from Xero Payroll.
+        
+        Returns:
+            list: A list of dictionaries containing employee information with fields:
+                - EmployeeID
+                - FirstName
+                - LastName
+                - Status (Active/Terminated)
+                - Email (if available)
+        """
+        response = self.get("employees")
+        employees = response.get("employees", [])
+        
+        # Format the response to include only necessary information
+        employee_list = []
+        for employee in employees:
+            employee_info = {
+                "EmployeeID": employee.get("EmployeeID"),
+                "FirstName": employee.get("FirstName"),
+                "LastName": employee.get("LastName"),
+                "Status": employee.get("Status"),
+                "Email": employee.get("Email")
+            }
+            employee_list.append(employee_info)
+            
+        return employee_list
+
 
 # --- Singleton Instance ---
 # This makes it easy to use the same API client across the application.

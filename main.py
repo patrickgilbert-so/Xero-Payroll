@@ -13,6 +13,24 @@ from xero_payroll.leave import (
     LEAVE_TYPE_IDS,
 )
 
+def display_employee_list():
+    """
+    Retrieves and displays a list of all employees from Xero.
+    """
+    try:
+        employees = xero_api_client.list_employees()
+        print("\n=== Xero Employees ===")
+        print("ID | Name | Status | Email")
+        print("-" * 50)
+        for emp in employees:
+            name = f"{emp['FirstName']} {emp['LastName']}"
+            print(f"{emp['EmployeeID']} | {name} | {emp['Status']} | {emp.get('Email', 'N/A')}")
+        print("-" * 50)
+        return employees
+    except Exception as e:
+        print(f"Error retrieving employee list: {e}")
+        return []
+
 def main():
     """
     Main function to demonstrate the Xero Payroll API integration.
@@ -44,10 +62,19 @@ def main():
     # Replace with a real EmployeeID from your Xero account.
     employee_id = "your_employee_id_here" 
     
-    if employee_id == "your_employee_id_here":
-        print("\nPlease update 'employee_id' in main.py with a real EmployeeID.")
+    # Display list of employees
+    print("\nRetrieving employee list...")
+    employees = display_employee_list()
+    
+    if not employees:
+        print("No employees found or error occurred.")
         return
-
+    
+    # Ask user to select an employee
+    employee_id = input("\nEnter the Employee ID you want to work with (or press Enter to exit): ").strip()
+    if not employee_id:
+        return
+        
     print(f"\n--- Operations for Employee: {employee_id} ---")
 
     # 1. Get leave balance for a specific category
@@ -86,6 +113,8 @@ def main():
     # 5. Create a leave request
     try:
         print("\nCreating a new leave request...")
+        print("\nExiting as we're not ready to create a leave request right now...")
+        sys.exit(0)
         start_date = (date.today() + timedelta(days=30)).isoformat()
         end_date = (date.today() + timedelta(days=35)).isoformat()
         

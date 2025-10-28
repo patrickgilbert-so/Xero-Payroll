@@ -75,12 +75,31 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     total_hours = 0.0
     future_applications = []
     for app in applications:
+        # Clean up the IDs by stripping whitespace and ensuring they're strings
+        app_employee_id = str(app.get("EmployeeID", "")).strip()
+        app_leave_type_id = str(app.get("LeaveTypeID", "")).strip()
+        employee_id = str(employee_id).strip()
+        leave_type_id = str(leave_type_id).strip()
+        
+        # Debug output for each application
+        print(f"\nChecking application:")
+        print(f"Application Employee ID: '{app_employee_id}' (len: {len(app_employee_id)})")
+        print(f"Expected Employee ID:    '{employee_id}' (len: {len(employee_id)})")
+        print(f"Application Leave Type:  '{app_leave_type_id}' (len: {len(app_leave_type_id)})")
+        print(f"Expected Leave Type:     '{leave_type_id}' (len: {len(leave_type_id)})")
+        
+        # Check byte-by-byte comparison
+        print("Employee ID bytes:", [ord(c) for c in app_employee_id])
+        print("Expected ID bytes:", [ord(c) for c in employee_id])
+        
         # Check if this application belongs to our employee
-        if app.get("EmployeeID") != employee_id:
+        if app_employee_id != employee_id:
+            print("-> Employee ID did not match")
             continue
             
         # Check if this is the right leave type
-        if app.get("LeaveTypeID") != leave_type_id:
+        if app_leave_type_id != leave_type_id:
+            print("-> Leave Type ID did not match")
             continue
             
         # Convert Unix timestamp to date

@@ -104,15 +104,16 @@ def main():
         
         print("\nFuture Leave Requests:")
         print("-" * 40)
-        if summary['future_leave_requests']:
-            for request in summary['future_leave_requests']:
-                print(f"Date: {request['date']}")
-                print(f"Type: {request['leave_type']}")
-                print(f"Amount: {request['days']:.1f} days")
-                print(f"Status: {request['status']}")
-                print("-" * 20)
-        else:
-            print("No future leave requests found")
+        #if summary['future_leave_requests']:
+            # do nothing
+            #for request in summary['future_leave_requests']:
+                #print(f"Date: {request['date']}")
+                #print(f"Type: {request['leave_type']}")
+                #print(f"Amount: {request['days']:.1f} days")
+                #print(f"Status: {request['status']}")
+                #print("-" * 20)
+        #else:
+        #    print("No future leave requests found")
             
         print("\nPredicted Balances (6 months):")
         print("-" * 40)
@@ -121,7 +122,6 @@ def main():
             print(f"  Raw Balance:      {balances['raw_balance']:.2f} hours ({balances['raw_balance']/8:.1f} days)")
             print(f"  Future Requests:  {balances['requested']:.2f} hours ({balances['requested']/8:.1f} days)")
             print(f"  Remaining:        {balances['remaining']:.2f} hours ({balances['remaining']/8:.1f} days)")
-            print(f"    Scheduled Leave: {data['scheduled_leave']} hours")
     except Exception as e:
         print(f"Error getting leave summary: {e}")
 

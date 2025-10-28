@@ -1,6 +1,6 @@
 # leave.py
 
-from datetime import date
+from datetime import date, datetime
 from .api import xero_api_client
 from .utils import calculate_accrued_leave
 
@@ -269,46 +269,80 @@ def get_leave_summary(employee_id: str) -> dict:
         )
     
     return summary
-        # Get scheduled leave for this leave type
-        scheduled_leave = 0.0
-        if leave_type_id:
-            response = xero_api_client.get("LeaveApplications", params={
-                "where": f'EmployeeID=="{employee_id}" AND LeaveTypeID=="{leave_type_id}" AND StartDate > DateTime.Parse("{date.today().isoformat()}")'
-            })
-            for app in response.get("LeaveApplications", []):
-                if app.get("Status") == "APPROVED":
-                    for period in app.get("LeavePeriods", []):
-                        scheduled_leave += float(period.get("NumberOfUnits", 0.0))
-        
-        summary[leave_name] = {
-            "current_balance": current_balance,
-            "scheduled_leave": scheduled_leave,
-        }
-    
-    return summary
 
 def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, hours_per_week: float = 38.0) -> float:
     """
     Predicts the leave balance for an employee on a future date.
     Note: This is a simplified prediction for Annual Leave only.
     """
-    if leave_type != "Annual":
-        # For simplicity, this example only calculates accrual for annual leave.
-        # Other leave types might not accrue in the same way.
-        current_balance = get_employee_leave_balance(employee_id, leave_type)
-        scheduled_leave = get_future_scheduled_leave(employee_id, leave_type)
-        return current_balance - scheduled_leave
-
-    current_balance = get_employee_leave_balance(employee_id, "Annual")
-    scheduled_leave = get_future_scheduled_leave(employee_id, "Annual")
+    # Get current balance
+    current_balance = get_employee_leave_balance(employee_id, leave_type)
     
+    # Get scheduled leave
+    total_scheduled = 0.0
+    
+    # For non-annual leave types, just subtract scheduled leave
+    if leave_type != "Annual":
+        response = xero_api_client.get("LeaveApplications")
+        applications = response.get("LeaveApplications", [])
+        
+        for app in applications:
+            if app.get("EmployeeID") != employee_id:
+                continue
+                
+            start_date_str = app.get("StartDate", "")
+            if not start_date_str:
+                continue
+                
+            try:
+                timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
+                start_date = datetime.fromtimestamp(timestamp).date()
+                
+                if start_date <= future_date:
+                    # Sum up approved/processed leave periods
+                    leave_periods = app.get("LeavePeriods", [])
+                    total_scheduled += sum(
+                        float(period.get("NumberOfUnits", 0.0))
+                        for period in leave_periods
+                        if period.get("LeavePeriodStatus") in {"APPROVED", "PROCESSED"}
+                    )
+            except:
+                continue
+                
+        return current_balance - total_scheduled
+    
+    # For Annual Leave, include accrual calculation
     today = date.today()
     accrued_leave = calculate_accrued_leave(today, future_date, hours_per_week)
     
-    # This is a simplification. A more accurate model would need to consider
-    # leave taken between today and the future date.
-    predicted_balance = current_balance + accrued_leave - scheduled_leave
-    return predicted_balance
+    # Calculate scheduled leave
+    response = xero_api_client.get("LeaveApplications")
+    applications = response.get("LeaveApplications", [])
+    
+    for app in applications:
+        if app.get("EmployeeID") != employee_id:
+            continue
+            
+        start_date_str = app.get("StartDate", "")
+        if not start_date_str:
+            continue
+            
+        try:
+            timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
+            start_date = datetime.fromtimestamp(timestamp).date()
+            
+            if start_date <= future_date:
+                # Sum up approved/processed leave periods
+                leave_periods = app.get("LeavePeriods", [])
+                total_scheduled += sum(
+                    float(period.get("NumberOfUnits", 0.0))
+                    for period in leave_periods
+                    if period.get("LeavePeriodStatus") in {"APPROVED", "PROCESSED"}
+                )
+        except:
+            continue
+    
+    return current_balance + accrued_leave - total_scheduled
 
 def create_leave_request(employee_id: str, leave_type: str, start_date: str, end_date: str, description: str, hours: float):
     """Lodges a leave request for an employee."""

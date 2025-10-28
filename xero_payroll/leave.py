@@ -21,14 +21,7 @@ def get_employee_leave_balance(employee_id: str, leave_type: str) -> float:
     # Get the Xero leave name for our internal leave type
     xero_leave_name = LEAVE_TYPES.get(leave_type)
     if not xero_leave_name:
-        print(f"Warning: Leave type '{leave_type}' is not configured in this Xero account")
         return 0.0
-    
-    # Debug output
-    print(f"\nSearching for leave type: {xero_leave_name}")
-    print("Available leave balances:")
-    for balance in employee.get("LeaveBalances", []):
-        print(f"Leave Type: {balance.get('LeaveName')}, Balance: {balance.get('NumberOfUnits')}")
     
     # Search by leave name
     for balance in employee.get("LeaveBalances", []):
@@ -41,30 +34,10 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     """Finds the future scheduled leave for an employee for a given leave category."""
     from datetime import datetime
     today = date.today()
-    print(f"\nSearching for leave after {today}")
     
-    # Get all leave applications first
+    # Get all leave applications
     response = xero_api_client.get("LeaveApplications")
     applications = response.get("LeaveApplications", [])
-    
-    # Print overall statistics
-    future_apps = []
-    matching_emp_apps = []
-    for app in applications:
-        try:
-            start_date_str = app.get("StartDate", "")
-            if start_date_str:
-                timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
-                if timestamp > today.timestamp():
-                    future_apps.append(app)
-            if app.get("EmployeeID") == employee_id:
-                matching_emp_apps.append(app)
-        except:
-            continue
-            
-    print(f"\nFound {len(applications)} total leave applications")
-    print(f"Of which {len(future_apps)} are in the future")
-    print(f"And {len(matching_emp_apps)} belong to employee {employee_id}")
     
     # Get the Xero leave name for our internal leave type
     xero_leave_name = LEAVE_TYPES.get(leave_type)
@@ -198,20 +171,104 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     return total_hours
 
 def get_leave_summary(employee_id: str) -> dict:
-    """Returns a leave summary for all categories for the selected employee."""
-    # First get all available leave types from the employee record
+    """Returns a comprehensive leave summary for all categories for the selected employee."""
+    from datetime import datetime, timedelta
+    
+    # Get employee details and current balances
     response = xero_api_client.get(f"Employees/{employee_id}")
     employee = response.get("Employees", [{}])[0]
+    employee_name = f"{employee.get('FirstName', '')} {employee.get('LastName', '')}".strip()
     
-    summary = {}
+    # Initialize summary structure
+    summary = {
+        "employee_name": employee_name,
+        "current_balances": {},
+        "future_leave_requests": [],
+        "future_balances": {}
+    }
+    
+    # Process current balances and get leave type mappings
+    leave_type_mapping = {}  # Maps LeaveTypeID to LeaveName
     for balance in employee.get("LeaveBalances", []):
         leave_name = balance.get("LeaveName")
         if not leave_name:
             continue
             
-        current_balance = float(balance.get("NumberOfUnits", 0.0))
         leave_type_id = balance.get("LeaveTypeID")
+        current_balance = float(balance.get("NumberOfUnits", 0.0))
         
+        summary["current_balances"][leave_name] = current_balance
+        leave_type_mapping[leave_type_id] = leave_name
+        
+        # Initialize future balances
+        summary["future_balances"][leave_name] = {
+            "raw_balance": current_balance,  # Will be updated with accrual
+            "requested": 0.0,
+            "remaining": current_balance  # Will be updated after calculating requests
+        }
+    
+    # Get future leave requests
+    today = datetime.now().date()
+    six_months = today + timedelta(days=180)
+    
+    response = xero_api_client.get("LeaveApplications")
+    for app in response.get("LeaveApplications", []):
+        if app.get("EmployeeID") != employee_id:
+            continue
+            
+        # Parse leave application date
+        start_date_str = app.get("StartDate", "")
+        if not start_date_str:
+            continue
+            
+        try:
+            timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
+            start_date = datetime.fromtimestamp(timestamp).date()
+            
+            # Skip if not in the future
+            if start_date <= today:
+                continue
+                
+            # Get the leave details
+            leave_type = leave_type_mapping.get(app.get("LeaveTypeID"))
+            if not leave_type:
+                continue
+                
+            # Calculate total hours for this request
+            total_hours = sum(
+                float(period.get("NumberOfUnits", 0.0))
+                for period in app.get("LeavePeriods", [])
+                if period.get("LeavePeriodStatus") in {"APPROVED", "PROCESSED"}
+            )
+            
+            if total_hours > 0:
+                # Add to future leave requests list
+                request_info = {
+                    "date": start_date.strftime("%Y-%m-%d"),
+                    "leave_type": leave_type,
+                    "days": total_hours / 8.0,  # Convert hours to days
+                    "status": "Approved/Processed"
+                }
+                summary["future_leave_requests"].append(request_info)
+                
+                # Update future balances if within 6 months
+                if start_date <= six_months:
+                    summary["future_balances"][leave_type]["requested"] += total_hours
+                    
+        except:
+            continue
+    
+    # Sort future leave requests by date
+    summary["future_leave_requests"].sort(key=lambda x: x["date"])
+    
+    # Calculate remaining balances
+    for leave_type in summary["future_balances"]:
+        summary["future_balances"][leave_type]["remaining"] = (
+            summary["future_balances"][leave_type]["raw_balance"] -
+            summary["future_balances"][leave_type]["requested"]
+        )
+    
+    return summary
         # Get scheduled leave for this leave type
         scheduled_leave = 0.0
         if leave_type_id:

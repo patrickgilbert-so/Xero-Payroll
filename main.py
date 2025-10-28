@@ -91,13 +91,36 @@ def main():
     except Exception as e:
         print(f"Error getting scheduled leave: {e}")
 
-    # 3. Get leave summary
+    # Get and display comprehensive leave summary
     try:
         summary = get_leave_summary(employee_id)
-        print("\nLeave Summary:")
-        for leave_type, data in summary.items():
-            print(f"  {leave_type}:")
-            print(f"    Current Balance: {data['current_balance']} hours")
+        
+        print(f"\n=== Leave Summary for {summary['employee_name']} ===\n")
+        
+        print("Current Leave Balances:")
+        print("-" * 40)
+        for leave_type, balance in summary['current_balances'].items():
+            print(f"{leave_type}: {balance:.2f} hours ({balance/8:.1f} days)")
+        
+        print("\nFuture Leave Requests:")
+        print("-" * 40)
+        if summary['future_leave_requests']:
+            for request in summary['future_leave_requests']:
+                print(f"Date: {request['date']}")
+                print(f"Type: {request['leave_type']}")
+                print(f"Amount: {request['days']:.1f} days")
+                print(f"Status: {request['status']}")
+                print("-" * 20)
+        else:
+            print("No future leave requests found")
+            
+        print("\nPredicted Balances (6 months):")
+        print("-" * 40)
+        for leave_type, balances in summary['future_balances'].items():
+            print(f"\n{leave_type}:")
+            print(f"  Raw Balance:      {balances['raw_balance']:.2f} hours ({balances['raw_balance']/8:.1f} days)")
+            print(f"  Future Requests:  {balances['requested']:.2f} hours ({balances['requested']/8:.1f} days)")
+            print(f"  Remaining:        {balances['remaining']:.2f} hours ({balances['remaining']/8:.1f} days)")
             print(f"    Scheduled Leave: {data['scheduled_leave']} hours")
     except Exception as e:
         print(f"Error getting leave summary: {e}")

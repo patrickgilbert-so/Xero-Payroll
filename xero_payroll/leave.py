@@ -68,18 +68,60 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     print(f"\nSearching for future leave applications of type: {leave_type}")
     print(f"Found {len(applications)} total leave applications")
     
+    # Debug output to understand what we're working with
+    print(f"\nEmployee ID: {employee_id}")
+    print(f"Leave Type ID: {leave_type_id}")
+    
     total_hours = 0.0
+    future_applications = []
     for app in applications:
-        if (app.get("EmployeeID") == employee_id and 
-            app.get("LeaveTypeID") == leave_type_id and 
-            app.get("StartDate") > today and
-            app.get("Status") == "APPROVED"):
+        # Check if this application belongs to our employee
+        if app.get("EmployeeID") != employee_id:
+            continue
             
-            leave_periods = app.get("LeavePeriods", [])
-            for period in leave_periods:
-                total_hours += float(period.get("NumberOfUnits", 0.0))
-                print(f"Found approved leave: {app.get('StartDate')} - {app.get('EndDate')}, "
-                      f"Hours: {period.get('NumberOfUnits')}")
+        # Check if this is the right leave type
+        if app.get("LeaveTypeID") != leave_type_id:
+            continue
+            
+        # Convert Unix timestamp to date
+        # Xero dates are in format "/Date(1234567890000+0000)/"
+        start_date_str = app.get("StartDate", "")
+        if start_date_str:
+            try:
+                timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
+                from datetime import datetime
+                app_date = datetime.fromtimestamp(timestamp).date()
+                if app_date.isoformat() <= today:
+                    continue
+            except:
+                print(f"Warning: Could not parse date {start_date_str}")
+                continue
+        
+        # Only include APPROVED or SUBMITTED applications
+        period_status = next((p.get("LeavePeriodStatus") for p in app.get("LeavePeriods", [])), None)
+        if period_status not in ["PROCESSED", "APPROVED"]:
+            continue
+            
+        # Add up the hours
+        leave_periods = app.get("LeavePeriods", [])
+        period_hours = sum(float(period.get("NumberOfUnits", 0.0)) for period in leave_periods)
+        total_hours += period_hours
+        
+        # Store for debug output
+        future_applications.append({
+            'title': app.get('Title', 'Untitled'),
+            'start': app.get('StartDate'),
+            'end': app.get('EndDate'),
+            'hours': period_hours
+        })
+    
+    # Debug output
+    if future_applications:
+        print(f"\nFound {len(future_applications)} future leave application(s):")
+        for app in future_applications:
+            print(f"- {app['title']}: {app['start']} to {app['end']}, Hours: {app['hours']}")
+    else:
+        print("\nNo future leave applications found for this employee and leave type")
                 
     return total_hours
 

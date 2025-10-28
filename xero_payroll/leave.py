@@ -210,6 +210,24 @@ def update_leave_balance(employee_id: str, leave_type: str, new_balance: float):
     It's often better to create a leave application or a pay run adjustment.
     This function is a placeholder for what might be a more complex operation.
     """
+    # Get the Xero leave name for our internal leave type
+    xero_leave_name = LEAVE_TYPES.get(leave_type)
+    if not xero_leave_name:
+        raise ValueError(f"Leave type '{leave_type}' is not configured in this Xero account")
+
+    # Get the leave type ID from the employee's leave balances
+    response = xero_api_client.get(f"Employees/{employee_id}")
+    employee = response.get("Employees", [{}])[0]
+    
+    leave_type_id = None
+    for balance in employee.get("LeaveBalances", []):
+        if balance.get("LeaveName") == xero_leave_name:
+            leave_type_id = balance.get("LeaveTypeID")
+            break
+            
+    if not leave_type_id:
+        raise ValueError(f"Could not find leave type ID for {xero_leave_name}")
+    
     # The Xero API might not allow direct PUT/POST to update a leave balance.
     # This is a conceptual function. You would typically adjust balances
     # through pay items in a pay run.
@@ -218,14 +236,14 @@ def update_leave_balance(employee_id: str, leave_type: str, new_balance: float):
     
     # Example of what the payload *could* look like if it were supported.
     data = {
-        "employeeID": employee_id,
-        "leaveBalances": [
+        "EmployeeID": employee_id,
+        "LeaveBalances": [
             {
-                "leaveTypeID": LEAVE_TYPE_IDS[leave_type],
-                "leaveBalance": new_balance
+                "LeaveTypeID": leave_type_id,
+                "NumberOfUnits": new_balance
             }
         ]
     }
     # This endpoint is hypothetical.
-    # return xero_api_client.post(f"employees/{employee_id}", data)
+    # return xero_api_client.post(f"Employees/{employee_id}", data)
     raise NotImplementedError("Direct leave balance updates are not typically supported via the API.")

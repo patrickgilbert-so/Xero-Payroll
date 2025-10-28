@@ -11,7 +11,7 @@ from xero_payroll.leave import (
     create_leave_request,
     approve_leave_request,
     reject_leave_request,
-    LEAVE_TYPE_IDS,
+    LEAVE_TYPES,
 )
 
 def display_employee_list():

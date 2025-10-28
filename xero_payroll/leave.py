@@ -67,8 +67,8 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     print(f"Found {len(applications)} total leave applications")
     
     # Debug output to understand what we're working with
-    print(f"\nEmployee ID: {employee_id}")
-    print(f"Leave Type ID: {leave_type_id}")
+    #print(f"\nEmployee ID: {employee_id}")
+    #print(f"Leave Type ID: {leave_type_id}")
     
     total_hours = 0.0
     future_applications = []
@@ -80,24 +80,24 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
         leave_type_id = str(leave_type_id).strip()
         
         # Debug output for each application
-        print(f"\nChecking application:")
-        print(f"Application Employee ID: '{app_employee_id}' (len: {len(app_employee_id)})")
-        print(f"Expected Employee ID:    '{employee_id}' (len: {len(employee_id)})")
-        print(f"Application Leave Type:  '{app_leave_type_id}' (len: {len(app_leave_type_id)})")
-        print(f"Expected Leave Type:     '{leave_type_id}' (len: {len(leave_type_id)})")
+        #print(f"\nChecking application:")
+        #print(f"Application Employee ID: '{app_employee_id}' (len: {len(app_employee_id)})")
+        #print(f"Expected Employee ID:    '{employee_id}' (len: {len(employee_id)})")
+        #print(f"Application Leave Type:  '{app_leave_type_id}' (len: {len(app_leave_type_id)})")
+        #print(f"Expected Leave Type:     '{leave_type_id}' (len: {len(leave_type_id)})")
         
         # Check byte-by-byte comparison
-        print("Employee ID bytes:", [ord(c) for c in app_employee_id])
-        print("Expected ID bytes:", [ord(c) for c in employee_id])
+        #print("Employee ID bytes:", [ord(c) for c in app_employee_id])
+        #print("Expected ID bytes:", [ord(c) for c in employee_id])
         
         # Check if this application belongs to our employee
         if app_employee_id != employee_id:
-            print("-> Employee ID did not match")
+            #print("-> Employee ID did not match")
             continue
             
         # Check if this is the right leave type
         if app_leave_type_id != leave_type_id:
-            print("-> Leave Type ID did not match")
+            #print("-> Leave Type ID did not match")
             continue
             
         # Process leave application dates
@@ -108,19 +108,19 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
                 timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
                 app_date = datetime.fromtimestamp(timestamp).date()
                 
-                print(f"\nProcessing Leave Application:")
-                print(f"Title: {app.get('Title', 'Untitled')}")
-                print(f"Start Date: {app_date}")
-                print(f"Today: {today}")
+                #print(f"\nProcessing Leave Application:")
+                #print(f"Title: {app.get('Title', 'Untitled')}")
+                #print(f"Start Date: {app_date}")
+                #print(f"Today: {today}")
                 
                 if app_date <= today:
-                    print(f"-> Skipping as {app_date} is not in the future")
+                    #print(f"-> Skipping as {app_date} is not in the future")
                     continue
                 
                 # Found a future leave application, check its status
                 periods = app.get('LeavePeriods', [])
                 if not periods:
-                    print("-> No leave periods found")
+                    #print("-> No leave periods found")
                     continue
                     
                 # Check if any periods are approved or processed
@@ -133,9 +133,9 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
                 
                 print(f"-> Found {len(valid_periods)} approved/processed leave periods!")
                 for period in valid_periods:
-                    print(f"   - Hours: {period.get('NumberOfUnits')}")
-                    print(f"     Status: {period.get('LeavePeriodStatus')}")
-                    print(f"     Period: {period.get('PayPeriodStartDate')} to {period.get('PayPeriodEndDate')}")
+                    #print(f"   - Hours: {period.get('NumberOfUnits')}")
+                    #print(f"     Status: {period.get('LeavePeriodStatus')}")
+                    #print(f"     Period: {period.get('PayPeriodStartDate')} to {period.get('PayPeriodEndDate')}")
                     total_hours += float(period.get('NumberOfUnits', 0.0))
                 
             except Exception as e:
@@ -163,8 +163,8 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     # Debug output
     if future_applications:
         print(f"\nFound {len(future_applications)} future leave application(s):")
-        for app in future_applications:
-            print(f"- {app['title']}: {app['start']} to {app['end']}, Hours: {app['hours']}")
+        #for app in future_applications:
+        #    print(f"- {app['title']}: {app['start']} to {app['end']}, Hours: {app['hours']}")
     else:
         print("\nNo future leave applications found for this employee and leave type")
                 

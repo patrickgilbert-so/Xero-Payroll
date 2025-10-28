@@ -1,7 +1,8 @@
 # main.py
 
+import sys
 from datetime import date, timedelta
-from xero_payroll.api import xero_api_client
+from xero_payroll.api import xero_api_client, create_xero_client
 from xero_payroll.leave import (
     get_employee_leave_balance,
     get_future_scheduled_leave,
@@ -34,28 +35,27 @@ def display_employee_list():
 def main():
     """
     Main function to demonstrate the Xero Payroll API integration.
-    
-    This function requires you to have a valid token.
-    You'll need to run an OAuth 2.0 flow to get one.
     """
-    # --- Authentication ---
-    # This is a placeholder for the authentication process.
-    # In a real application, you would redirect the user to the authorization URL,
-    # get the callback, and then fetch the token.
-    if not xero_api_client.token:
-        print(">>> Step 1: Get Authorization URL")
-        auth_url, _ = xero_api_client.get_authorization_url()
-        print("Please go to this URL and authorize the application:", auth_url)
+    global xero_api_client
+    
+    # Example of how to initialize with tokens
+    if not xero_api_client:
+        # You would normally get these values from your secure storage
+        initial_token = {
+            "access_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFDQUY4RTY2NzcyRDZEQzAyOEQ2NzI2RkQwMjYxNTgxNTcwRUZDMTkiLCJ0eXAiOiJKV1QiLCJ4NXQiOiJISy1PWm5jdGJjQW8xbkp2MENZVmdWY09fQmsifQ.eyJuYmYiOjE3NjE2MTQzMTUsImV4cCI6MTc2MTYxNjExNSwiaXNzIjoiaHR0cHM6Ly9pZGVudGl0eS54ZXJvLmNvbSIsImF1ZCI6Imh0dHBzOi8vaWRlbnRpdHkueGVyby5jb20vcmVzb3VyY2VzIiwiY2xpZW50X2lkIjoiODEyNTE4NUU0Q0Y3NDgzOEE0MjY5OTczRUU0NzVFN0EiLCJzdWIiOiIzZmYxMTAwMWE2NDI1NWZmYTk3MzEzY2RkNWMwODg4YSIsImF1dGhfdGltZSI6MTc2MTI1ODAyNSwieGVyb191c2VyaWQiOiIyMzdmMmMxZC0wZTQ3LTQyNTgtOTdlMC1iMmNkNjEwNjc4ZTUiLCJnbG9iYWxfc2Vzc2lvbl9pZCI6IjM5YTVlY2Y5OGVhOTQ5NzdhZmVhMGY3NTg2MDYyMjNiIiwic2lkIjoiMzlhNWVjZjk4ZWE5NDk3N2FmZWEwZjc1ODYwNjIyM2IiLCJhdXRoZW50aWNhdGlvbl9ldmVudF9pZCI6IjQxNzFiMjNmLWRmYTMtNGJjYS05ZDE5LWQ4OTRlMzM5OWRhNiIsImp0aSI6IjJEMTVFREM0OTgxMUZEQTMzMjk3NDE4MEU5OUI1NzE2Iiwic2NvcGUiOlsiZW1haWwiLCJwcm9maWxlIiwib3BlbmlkIiwicGF5cm9sbC5lbXBsb3llZXMiLCJwYXlyb2xsLnRpbWVzaGVldHMiLCJhY2NvdW50aW5nLnRyYW5zYWN0aW9ucyIsInBheXJvbGwuc2V0dGluZ3MiLCJvZmZsaW5lX2FjY2VzcyJdLCJhbXIiOlsicHdkIiwibWZhIiwic3drIl19.nBoNccBWeD0Y9p3XpxUZgFiqRFsO_-W8X2bYZIU3EEQUUlq9R6h0beQt-k-HrCAf_ztsjz0iQRYrv7YZlmR94yOSXNkglMIRzuuF_olyDRSrdeBIxS-p7_DU0P20CcHp00NPIbb1ltIsk1q85yo_lrK_9NS8t_rY_AxsZLE0ngRdUmhVcp5d9ePFfjbAGe8sFuA1BrXWv0-PaTIsZmeffPsF4hq4K8htBkbqwYSErEpxUKz3cIw6DOtEUicSmon3t90AXackQEw4ZxGeeS7c1a4okBZAQ0w5l3V8ObqaP45uXGaNm8XCcTqdq_ALgjPYSvFOZ0yWbZ97FTZaqDVGmg",
+            "refresh_token": "nOtkKZABV4mPBeo5LY3Q7TgoAc99_SKV_YRvafWWZ7g",
+            "token_type": "Bearer",
+            "expires_in": 1800,  # 30 minutes
+            "expires_at": 1735473600  # Unix timestamp when token expires
+        }
         
-        # In a web app, you would handle the redirect. Here, we'll fake it.
-        redirect_response = input("Paste the full redirect URL here: ")
+        tenant_id = "993a65df-7298-40d2-8cdd-ca4a71f09e26"  # Optional, will be fetched if not provided
         
-        print("\n>>> Step 2: Fetching Token")
         try:
-            xero_api_client.fetch_token(redirect_response)
-            print("Token fetched successfully!")
+            xero_api_client = create_xero_client(initial_token, tenant_id)
+            print("API client initialized successfully!")
         except Exception as e:
-            print(f"Error fetching token: {e}")
+            print(f"Error initializing API client: {e}")
             return
 
     # --- Example Usage ---

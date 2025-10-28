@@ -29,16 +29,33 @@ TOKEN_URL = "https://identity.xero.com/connect/token"
 class XeroAPI:
     """A wrapper for the Xero API."""
 
-    def __init__(self, client_id, client_secret, redirect_uri, scope, token_file):
-        """Initializes the XeroAPI client."""
+    def __init__(self, client_id, client_secret, token_file, initial_token=None, tenant_id=None):
+        """
+        Initializes the XeroAPI client.
+        
+        Args:
+            client_id (str): The Xero API client ID
+            client_secret (str): The Xero API client secret
+            token_file (str): Path to the file where tokens will be stored
+            initial_token (dict, optional): Initial token dictionary containing access_token and refresh_token
+            tenant_id (str, optional): The Xero tenant ID. If not provided, will be fetched from the API
+        """
         self.client_id = client_id
         self.client_secret = client_secret
-        self.redirect_uri = redirect_uri
-        self.scope = scope
         self.token_file = token_file
-        self.token = self.load_token()
-        self.tenant_id = None
+        self.tenant_id = tenant_id
         
+        # Try to load existing token from file first
+        self.token = self.load_token()
+        
+        # If no token in file and initial token provided, use and save it
+        if not self.token and initial_token:
+            self.token = initial_token
+            self.save_token(initial_token)
+            
+        if not self.token:
+            raise ValueError("No token available. Please provide an initial token.")
+            
         auto_refresh_kwargs = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,
@@ -46,8 +63,6 @@ class XeroAPI:
         
         self.oauth = OAuth2Session(
             self.client_id,
-            redirect_uri=self.redirect_uri,
-            scope=self.scope,
             token=self.token,
             auto_refresh_url=TOKEN_URL,
             auto_refresh_kwargs=auto_refresh_kwargs,
@@ -161,6 +176,30 @@ class XeroAPI:
         return employee_list
 
 
-# --- Singleton Instance ---
-# This makes it easy to use the same API client across the application.
-xero_api_client = XeroAPI(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SCOPE, TOKEN_FILE)
+# Function to create the API client instance
+def create_xero_client(initial_token=None, tenant_id=None):
+    """
+    Creates a new XeroAPI client instance.
+    
+    Args:
+        initial_token (dict, optional): Initial token dictionary containing access_token and refresh_token
+        tenant_id (str, optional): The Xero tenant ID
+    
+    Returns:
+        XeroAPI: A configured XeroAPI client instance
+    """
+    return XeroAPI(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET,
+        token_file=TOKEN_FILE,
+        initial_token=initial_token,
+        tenant_id=tenant_id
+    )
+
+# Default instance - will try to load token from file
+xero_api_client = None
+try:
+    xero_api_client = create_xero_client()
+except ValueError:
+    # Don't create the client if no token is available
+    pass

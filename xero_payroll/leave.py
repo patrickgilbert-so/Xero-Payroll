@@ -39,8 +39,32 @@ def get_employee_leave_balance(employee_id: str, leave_type: str) -> float:
 
 def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     """Finds the future scheduled leave for an employee for a given leave category."""
+    from datetime import datetime
     today = date.today()
     print(f"\nSearching for leave after {today}")
+    
+    # Get all leave applications first
+    response = xero_api_client.get("LeaveApplications")
+    applications = response.get("LeaveApplications", [])
+    
+    # Print overall statistics
+    future_apps = []
+    matching_emp_apps = []
+    for app in applications:
+        try:
+            start_date_str = app.get("StartDate", "")
+            if start_date_str:
+                timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
+                if timestamp > today.timestamp():
+                    future_apps.append(app)
+            if app.get("EmployeeID") == employee_id:
+                matching_emp_apps.append(app)
+        except:
+            continue
+            
+    print(f"\nFound {len(applications)} total leave applications")
+    print(f"Of which {len(future_apps)} are in the future")
+    print(f"And {len(matching_emp_apps)} belong to employee {employee_id}")
     
     # Get the Xero leave name for our internal leave type
     xero_leave_name = LEAVE_TYPES.get(leave_type)
@@ -103,25 +127,46 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
             print("-> Leave Type ID did not match")
             continue
             
-        # Convert Unix timestamp to date
-        # Xero dates are in format "/Date(1234567890000+0000)/"
+        # Process leave application dates
         start_date_str = app.get("StartDate", "")
         if start_date_str:
             try:
+                # Extract timestamp from Xero date format
                 timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
-                from datetime import datetime
                 app_date = datetime.fromtimestamp(timestamp).date()
-                today_date = datetime.strptime(today, "%Y-%m-%d").date()
                 
-                print(f"Start Date: {app_date}, Today: {today_date}")
-                if app_date <= today_date:
+                print(f"\nProcessing Leave Application:")
+                print(f"Title: {app.get('Title', 'Untitled')}")
+                print(f"Start Date: {app_date}")
+                print(f"Today: {today}")
+                
+                if app_date <= today:
                     print(f"-> Skipping as {app_date} is not in the future")
                     continue
                 
-                print(f"-> Found future leave application!")
+                # Found a future leave application, check its status
+                periods = app.get('LeavePeriods', [])
+                if not periods:
+                    print("-> No leave periods found")
+                    continue
+                    
+                # Check if any periods are approved or processed
+                valid_statuses = {'APPROVED', 'PROCESSED'}
+                valid_periods = [p for p in periods if p.get('LeavePeriodStatus') in valid_statuses]
+                
+                if not valid_periods:
+                    print("-> No approved or processed leave periods found")
+                    continue
+                
+                print(f"-> Found {len(valid_periods)} approved/processed leave periods!")
+                for period in valid_periods:
+                    print(f"   - Hours: {period.get('NumberOfUnits')}")
+                    print(f"     Status: {period.get('LeavePeriodStatus')}")
+                    print(f"     Period: {period.get('PayPeriodStartDate')} to {period.get('PayPeriodEndDate')}")
+                    total_hours += float(period.get('NumberOfUnits', 0.0))
                 
             except Exception as e:
-                print(f"Warning: Could not parse date {start_date_str}: {str(e)}")
+                print(f"Warning: Could not process leave application: {str(e)}")
                 continue
         
         # Only include APPROVED or SUBMITTED applications

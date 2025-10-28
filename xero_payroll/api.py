@@ -155,15 +155,15 @@ class XeroAPI:
         }
         
         url = f"{PAYROLL_AU_URL}/{endpoint}"
-        print(f"Making GET request to: {url}")
-        print(f"Headers: {headers}")
+        #print(f"Making GET request to: {url}")
+        #print(f"Headers: {headers}")
         
         try:
             response = self.oauth.get(url, headers=headers, params=params)
             response.raise_for_status()
             data = response.json()
-            print(f"Response status: {response.status_code}")
-            print(f"Response data: {json.dumps(data, indent=2)}")
+            #print(f"Response status: {response.status_code}")
+            #print(f"Response data: {json.dumps(data, indent=2)}")
             return data
         except requests.exceptions.RequestException as e:
             print(f"Error making request: {str(e)}")
@@ -210,8 +210,8 @@ class XeroAPI:
         print("\nAttempting to list employees...")
         
         response = self.get("Employees")
-        print("\nFull API Response:")
-        print(json.dumps(response, indent=2))
+        #print("\nFull API Response:")
+        #print(json.dumps(response, indent=2))
         
         employees = response.get("Employees", [])  # Note: Changed to match Xero's response structure
         

@@ -6,16 +6,16 @@ import requests
 from requests_oauthlib import OAuth2Session
 
 # --- Configuration ---
-CLIENT_ID = "7D213F5F198F4E3C968EBBD7C16B5276"
-CLIENT_SECRET = "R5UX2xjDIdTi1QVT5idNZLkj5hxB6Dus1UqvCVZ5fjbpntpV"
+CLIENT_ID = "8125185E4CF74838A4269973EE475E7A"
+CLIENT_SECRET = "emoGiUHsdOUYI3QVDppe_PUcjO2fgv8EiLkL1rKZkOjLm-kT"
 REDIRECT_URI = "http://localhost:5000/callback"
-TOKEN_FILE = "/home/ubuntu/webhook_magic/XeroInvoiceImport/xero_tokens.json"
+TOKEN_FILE = "xero_tokens.json"
 SCOPE = [
     "openid",
     "profile",
     "email",
     "payroll.employees",
-    "payroll.leaveapplications",
+    "payroll.timesheets",
     "payroll.settings",
 ]
 

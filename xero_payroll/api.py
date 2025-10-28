@@ -113,14 +113,31 @@ class XeroAPI:
 
     def get(self, endpoint, params=None):
         """Makes a GET request to the Xero API."""
+        if not self.token:
+            raise ValueError("No token available. Please ensure you have provided valid tokens.")
+            
         headers = {
             "Authorization": f"Bearer {self.token['access_token']}",
             "Xero-Tenant-Id": self.get_tenant_id(),
             "Accept": "application/json",
         }
-        response = self.oauth.get(f"{PAYROLL_AU_URL}/{endpoint}", headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
+        
+        url = f"{PAYROLL_AU_URL}/{endpoint}"
+        print(f"Making GET request to: {url}")
+        print(f"Headers: {headers}")
+        
+        try:
+            response = self.oauth.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+            print(f"Response status: {response.status_code}")
+            print(f"Response data: {json.dumps(data, indent=2)}")
+            return data
+        except requests.exceptions.RequestException as e:
+            print(f"Error making request: {str(e)}")
+            if hasattr(e.response, 'text'):
+                print(f"Error response: {e.response.text}")
+            raise
 
     def post(self, endpoint, data):
         """Makes a POST request to the Xero API."""
@@ -158,8 +175,13 @@ class XeroAPI:
                 - Status (Active/Terminated)
                 - Email (if available)
         """
-        response = self.get("employees")
-        employees = response.get("employees", [])
+        print("\nAttempting to list employees...")
+        
+        response = self.get("Employees")
+        print("\nFull API Response:")
+        print(json.dumps(response, indent=2))
+        
+        employees = response.get("Employees", [])  # Note: Changed to match Xero's response structure
         
         # Format the response to include only necessary information
         employee_list = []

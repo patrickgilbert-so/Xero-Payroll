@@ -4,65 +4,116 @@ from datetime import date
 from .api import xero_api_client
 from .utils import calculate_accrued_leave
 
-# --- Leave Type IDs ---
-# These are examples. You'll need to fetch the actual LeaveTypeIDs from your Xero account
-# using the /leavetypes endpoint.
-LEAVE_TYPE_IDS = {
-    "Annual": "d9419cdd-a489-4569-96a2-6223d4e36d8e",
-    "CarersUnpaid": "c8e43958-4c39-43e8-94a3-55594a21b35e",
-    "CarersPaid": "f306a00a-7a4a-44d3-b6d1-232a1d5e47c2",
-    "CommunityServicePaid": "0f38f5a5-5518-4bf1-a15a-15f08b41b4f8",
-    "CommunityServiceUnpaid": "a3d300d3-1e4d-42b6-810c-2005e8f321c9",
-    "CompassionatePaid": "e5e6e9b0-ca73-46b0-950d-aa5d35d3e4a9",
-    "CompassionateUnpaid": "b31a5f69-64e4-4f33-a44b-3a09f239c2a8",
-    "LongService": "a8c6d5f1-dae8-449a-9b6f-1047b41780b3",
-    "ParentalUnpaid": "e0c17237-f1eb-47c3-97b3-0032c2a1339a",
-    "JuryDuty": "f05199e3-a05a-46f8-9f3b-3509e13211a5",
-    "UnauthorisedUnpaid": "a4c27998-720e-45a3-8899-5e83a235c809",
+# --- Leave Types ---
+# These are the standard leave types mapped to their display names in Xero
+LEAVE_TYPES = {
+    "Annual": "Annual Leave",
+    "LongService": "Long Service Leave",
+    "PersonalCarers": "Personal/Carer's Leave",
+    # Add other leave types as they become available in your Xero setup
 }
 
 def get_employee_leave_balance(employee_id: str, leave_type: str) -> float:
     """Retrieves the current leave balance for a selected employee and leave type."""
-    leave_type_id = LEAVE_TYPE_IDS.get(leave_type)
-    if not leave_type_id:
-        raise ValueError(f"Invalid leave type: {leave_type}")
-
-    response = xero_api_client.get(f"employees/{employee_id}")
-    leave_balances = response.get("employees", [{}])[0].get("leaveBalances", [])
+    response = xero_api_client.get(f"Employees/{employee_id}")
+    employee = response.get("Employees", [{}])[0]
     
-    for balance in leave_balances:
-        if balance.get("leaveTypeID") == leave_type_id:
-            return float(balance.get("leaveBalance", 0.0))
+    # Get the Xero leave name for our internal leave type
+    xero_leave_name = LEAVE_TYPES.get(leave_type)
+    if not xero_leave_name:
+        print(f"Warning: Leave type '{leave_type}' is not configured in this Xero account")
+        return 0.0
+    
+    # Debug output
+    print(f"\nSearching for leave type: {xero_leave_name}")
+    print("Available leave balances:")
+    for balance in employee.get("LeaveBalances", []):
+        print(f"Leave Type: {balance.get('LeaveName')}, Balance: {balance.get('NumberOfUnits')}")
+    
+    # Search by leave name
+    for balance in employee.get("LeaveBalances", []):
+        if balance.get("LeaveName") == xero_leave_name:
+            return float(balance.get("NumberOfUnits", 0.0))
+    
     return 0.0
 
 def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     """Finds the future scheduled leave for an employee for a given leave category."""
-    leave_type_id = LEAVE_TYPE_IDS.get(leave_type)
-    if not leave_type_id:
-        raise ValueError(f"Invalid leave type: {leave_type}")
-
     today = date.today().isoformat()
-    params = {
-        "where": f'EmployeeID=="{employee_id}" AND LeaveTypeID=="{leave_type_id}" AND StartDate > DateTime.Parse("{today}")'
-    }
-    response = xero_api_client.get("leaveapplications", params=params)
+    
+    # Get the Xero leave name for our internal leave type
+    xero_leave_name = LEAVE_TYPES.get(leave_type)
+    if not xero_leave_name:
+        print(f"Warning: Leave type '{leave_type}' is not configured in this Xero account")
+        return 0.0
+    
+    # First get the leave type ID from the employee's leave balances
+    response = xero_api_client.get(f"Employees/{employee_id}")
+    employee = response.get("Employees", [{}])[0]
+    
+    leave_type_id = None
+    for balance in employee.get("LeaveBalances", []):
+        if balance.get("LeaveName") == xero_leave_name:
+            leave_type_id = balance.get("LeaveTypeID")
+            break
+    
+    if not leave_type_id:
+        print(f"Warning: Could not find leave type ID for {xero_leave_name}")
+        return 0.0
+
+    response = xero_api_client.get("LeaveApplications")
+    applications = response.get("LeaveApplications", [])
+    
+    # Debug output
+    print(f"\nSearching for future leave applications of type: {leave_type}")
+    print(f"Found {len(applications)} total leave applications")
     
     total_hours = 0.0
-    for leave_app in response.get("leaveApplications", []):
-        total_hours += float(leave_app.get("leavePeriods", [{}])[0].get("numberOfUnits", 0.0))
-        
+    for app in applications:
+        if (app.get("EmployeeID") == employee_id and 
+            app.get("LeaveTypeID") == leave_type_id and 
+            app.get("StartDate") > today and
+            app.get("Status") == "APPROVED"):
+            
+            leave_periods = app.get("LeavePeriods", [])
+            for period in leave_periods:
+                total_hours += float(period.get("NumberOfUnits", 0.0))
+                print(f"Found approved leave: {app.get('StartDate')} - {app.get('EndDate')}, "
+                      f"Hours: {period.get('NumberOfUnits')}")
+                
     return total_hours
 
 def get_leave_summary(employee_id: str) -> dict:
     """Returns a leave summary for all categories for the selected employee."""
+    # First get all available leave types from the employee record
+    response = xero_api_client.get(f"Employees/{employee_id}")
+    employee = response.get("Employees", [{}])[0]
+    
     summary = {}
-    for leave_type in LEAVE_TYPE_IDS.keys():
-        current_balance = get_employee_leave_balance(employee_id, leave_type)
-        scheduled_leave = get_future_scheduled_leave(employee_id, leave_type)
-        summary[leave_type] = {
+    for balance in employee.get("LeaveBalances", []):
+        leave_name = balance.get("LeaveName")
+        if not leave_name:
+            continue
+            
+        current_balance = float(balance.get("NumberOfUnits", 0.0))
+        leave_type_id = balance.get("LeaveTypeID")
+        
+        # Get scheduled leave for this leave type
+        scheduled_leave = 0.0
+        if leave_type_id:
+            response = xero_api_client.get("LeaveApplications", params={
+                "where": f'EmployeeID=="{employee_id}" AND LeaveTypeID=="{leave_type_id}" AND StartDate > DateTime.Parse("{date.today().isoformat()}")'
+            })
+            for app in response.get("LeaveApplications", []):
+                if app.get("Status") == "APPROVED":
+                    for period in app.get("LeavePeriods", []):
+                        scheduled_leave += float(period.get("NumberOfUnits", 0.0))
+        
+        summary[leave_name] = {
             "current_balance": current_balance,
             "scheduled_leave": scheduled_leave,
         }
+    
     return summary
 
 def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, hours_per_week: float = 38.0) -> float:
@@ -90,13 +141,27 @@ def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, 
 
 def create_leave_request(employee_id: str, leave_type: str, start_date: str, end_date: str, description: str, hours: float):
     """Lodges a leave request for an employee."""
-    leave_type_id = LEAVE_TYPE_IDS.get(leave_type)
+    # Get the Xero leave name for our internal leave type
+    xero_leave_name = LEAVE_TYPES.get(leave_type)
+    if not xero_leave_name:
+        raise ValueError(f"Leave type '{leave_type}' is not configured in this Xero account")
+
+    # Get the leave type ID from the employee's leave balances
+    response = xero_api_client.get(f"Employees/{employee_id}")
+    employee = response.get("Employees", [{}])[0]
+    
+    leave_type_id = None
+    for balance in employee.get("LeaveBalances", []):
+        if balance.get("LeaveName") == xero_leave_name:
+            leave_type_id = balance.get("LeaveTypeID")
+            break
+            
     if not leave_type_id:
-        raise ValueError(f"Invalid leave type: {leave_type}")
+        raise ValueError(f"Could not find leave type ID for {xero_leave_name}")
 
     data = {
-        "employeeID": employee_id,
-        "leaveTypeID": leave_type_id,
+        "EmployeeID": employee_id,
+        "LeaveTypeID": leave_type_id,
         "title": description,
         "startDate": start_date,
         "endDate": end_date,

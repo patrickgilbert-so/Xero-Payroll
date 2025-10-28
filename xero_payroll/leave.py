@@ -261,10 +261,19 @@ def get_leave_summary(employee_id: str) -> dict:
     # Sort future leave requests by date
     summary["future_leave_requests"].sort(key=lambda x: x["date"])
     
-    # Calculate remaining balances
+    # Calculate future accrual and remaining balances
     for leave_type in summary["future_balances"]:
+        # Calculate 6-month future date for accrual prediction
+        future_date = six_months
+        
+        # Calculate predicted balance including accrual
+        predicted_balance = predict_leave_balance(employee_id, leave_type.split()[0], future_date)
+        accrued_amount = predicted_balance - summary["future_balances"][leave_type]["raw_balance"]
+        
+        summary["future_balances"][leave_type]["accrued"] = accrued_amount
         summary["future_balances"][leave_type]["remaining"] = (
-            summary["future_balances"][leave_type]["raw_balance"] -
+            summary["future_balances"][leave_type]["raw_balance"] +
+            accrued_amount -
             summary["future_balances"][leave_type]["requested"]
         )
     

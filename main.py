@@ -119,9 +119,10 @@ def main():
         print("-" * 40)
         for leave_type, balances in summary['future_balances'].items():
             print(f"\n{leave_type}:")
-            print(f"  Raw Balance:      {balances['raw_balance']:.2f} hours ({balances['raw_balance']/8:.1f} days)")
-            print(f"  Future Requests:  {balances['requested']:.2f} hours ({balances['requested']/8:.1f} days)")
-            print(f"  Remaining:        {balances['remaining']:.2f} hours ({balances['remaining']/8:.1f} days)")
+            print(f"  Current Balance:   {balances['raw_balance']:.2f} hours ({balances['raw_balance']/8:.1f} days)")
+            print(f"  Accrued Balance:   {balances['accrued']:.2f} hours ({balances['accrued']/8:.1f} days)")
+            print(f"  Future Requests:   {balances['requested']:.2f} hours ({balances['requested']/8:.1f} days)")
+            print(f"  Future Remaining:  {balances['remaining']:.2f} hours ({balances['remaining']/8:.1f} days)")
     except Exception as e:
         print(f"Error getting leave summary: {e}")
 

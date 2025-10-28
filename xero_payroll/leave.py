@@ -39,7 +39,8 @@ def get_employee_leave_balance(employee_id: str, leave_type: str) -> float:
 
 def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
     """Finds the future scheduled leave for an employee for a given leave category."""
-    today = date.today().isoformat()
+    today = date.today()
+    print(f"\nSearching for leave after {today}")
     
     # Get the Xero leave name for our internal leave type
     xero_leave_name = LEAVE_TYPES.get(leave_type)
@@ -110,10 +111,17 @@ def get_future_scheduled_leave(employee_id: str, leave_type: str) -> float:
                 timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
                 from datetime import datetime
                 app_date = datetime.fromtimestamp(timestamp).date()
-                if app_date.isoformat() <= today:
+                today_date = datetime.strptime(today, "%Y-%m-%d").date()
+                
+                print(f"Start Date: {app_date}, Today: {today_date}")
+                if app_date <= today_date:
+                    print(f"-> Skipping as {app_date} is not in the future")
                     continue
-            except:
-                print(f"Warning: Could not parse date {start_date_str}")
+                
+                print(f"-> Found future leave application!")
+                
+            except Exception as e:
+                print(f"Warning: Could not parse date {start_date_str}: {str(e)}")
                 continue
         
         # Only include APPROVED or SUBMITTED applications

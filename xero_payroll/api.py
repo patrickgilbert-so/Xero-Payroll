@@ -99,16 +99,48 @@ class XeroAPI:
 
     def refresh_token(self):
         """Refreshes the access token."""
-        self.token = self.oauth.refresh_token(TOKEN_URL, client_id=self.client_id, client_secret=self.client_secret)
-        self.save_token(self.token)
-        return self.token
+        try:
+            print("Refreshing access token...")
+            self.token = self.oauth.refresh_token(TOKEN_URL, client_id=self.client_id, client_secret=self.client_secret)
+            self.save_token(self.token)
+            print("Token refreshed successfully")
+            
+            # Check connections after refresh
+            connections = self.oauth.get("https://api.xero.com/connections").json()
+            if connections:
+                print(f"Connected to {len(connections)} Xero organization(s)")
+                for conn in connections:
+                    print(f"- {conn.get('tenantName', 'Unknown')} ({conn['tenantId']})")
+            else:
+                print("Warning: No Xero organizations connected. Please authorize this application to at least one Xero organization.")
+            
+            return self.token
+        except Exception as e:
+            print(f"Error refreshing token: {str(e)}")
+            raise
 
     def get_tenant_id(self):
         """Retrieves the tenant ID required for API calls."""
         if not self.tenant_id:
-            response = self.oauth.get("https://api.xero.com/connections")
-            response.raise_for_status()
-            self.tenant_id = response.json()[0]["tenantId"]
+            try:
+                response = self.oauth.get("https://api.xero.com/connections")
+                response.raise_for_status()
+                connections = response.json()
+                
+                if not connections:
+                    raise ValueError("No Xero organizations found. Please ensure this application has been authorized to at least one Xero organization.")
+                
+                print(f"Found {len(connections)} Xero organization(s)")
+                self.tenant_id = connections[0]["tenantId"]
+                print(f"Using organization with tenant ID: {self.tenant_id}")
+            except Exception as e:
+                print(f"Error getting tenant ID: {str(e)}")
+                print("\nAPI Response Content:")
+                try:
+                    print(response.content.decode())
+                except:
+                    print("Could not decode response content")
+                raise
         return self.tenant_id
 
     def get(self, endpoint, params=None):

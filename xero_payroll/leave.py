@@ -266,10 +266,29 @@ def get_leave_summary(employee_id: str) -> dict:
         # Calculate 6-month future date for accrual prediction
         future_date = six_months
         
-        # Calculate predicted balance including accrual
-        predicted_balance = predict_leave_balance(employee_id, leave_type.split()[0], future_date)
-        accrued_amount = predicted_balance - summary["future_balances"][leave_type]["raw_balance"]
-        
+        # Get the internal leave type name
+        internal_leave_type = None
+        for key, value in LEAVE_TYPES.items():
+            if value == leave_type:
+                internal_leave_type = key
+                break
+                
+        if internal_leave_type:
+            # Convert to our internal leave type
+            current = summary["future_balances"][leave_type]["raw_balance"]
+            
+            # Get the predicted balance which includes accrual
+            predicted = predict_leave_balance(employee_id, internal_leave_type, future_date)
+            
+            # Calculate only the accrued portion (always positive)
+            accrued_amount = abs(predicted - current)
+            
+            # Don't accrue for Other Unpaid Leave
+            if leave_type == "Other Unpaid Leave":
+                accrued_amount = 0.0
+        else:
+            accrued_amount = 0.0
+            
         summary["future_balances"][leave_type]["accrued"] = accrued_amount
         summary["future_balances"][leave_type]["remaining"] = (
             summary["future_balances"][leave_type]["raw_balance"] +
@@ -282,7 +301,7 @@ def get_leave_summary(employee_id: str) -> dict:
 def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, hours_per_week: float = 38.0) -> float:
     """
     Predicts the leave balance for an employee on a future date.
-    Note: This is a simplified prediction for Annual Leave only.
+    Calculates accrual for different leave types based on standard rates.
     """
     # Get current balance
     current_balance = get_employee_leave_balance(employee_id, leave_type)
@@ -290,39 +309,39 @@ def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, 
     # Get scheduled leave
     total_scheduled = 0.0
     
-    # For non-annual leave types, just subtract scheduled leave
-    if leave_type != "Annual":
-        response = xero_api_client.get("LeaveApplications")
-        applications = response.get("LeaveApplications", [])
-        
-        for app in applications:
-            if app.get("EmployeeID") != employee_id:
-                continue
-                
-            start_date_str = app.get("StartDate", "")
-            if not start_date_str:
-                continue
-                
-            try:
-                timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
-                start_date = datetime.fromtimestamp(timestamp).date()
-                
-                if start_date <= future_date:
-                    # Sum up approved/processed leave periods
-                    leave_periods = app.get("LeavePeriods", [])
-                    total_scheduled += sum(
-                        float(period.get("NumberOfUnits", 0.0))
-                        for period in leave_periods
-                        if period.get("LeavePeriodStatus") in {"APPROVED", "PROCESSED"}
-                    )
-            except:
-                continue
-                
-        return current_balance - total_scheduled
+    # Convert internal leave type to Xero leave type name for balance check
+    xero_leave_name = LEAVE_TYPES.get(leave_type)
+    if not xero_leave_name:
+        return current_balance  # Return current balance if leave type not found
     
-    # For Annual Leave, include accrual calculation
+    # Calculate accrual based on leave type
     today = date.today()
-    accrued_leave = calculate_accrued_leave(today, future_date, hours_per_week)
+    accrued_leave = 0.0
+    
+    # Calculate accrual rates based on leave type name from Xero
+    days_between = (future_date - today).days
+    daily_hours = hours_per_week / 5  # Convert weekly hours to daily hours
+    
+    if xero_leave_name == "Annual Leave":
+        # Standard annual leave accrual (4 weeks per year)
+        accrued_leave = calculate_accrued_leave(today, future_date, hours_per_week)
+    elif xero_leave_name == "Personal/Carer's Leave":
+        # Personal/Carer's leave accrues at 10 days per year
+        yearly_hours = 10 * daily_hours  # 10 days per year
+        accrued_leave = (yearly_hours / 365) * days_between
+    elif xero_leave_name == "Long Service Leave":
+        # Long Service Leave accrues at 6.5 weeks per 10 years
+        # 6.5 weeks = 32.5 days per 10 years = 3.25 days per year
+        yearly_days = 3.25  # days per year
+        yearly_hours = yearly_days * daily_hours
+        accrued_leave = abs((yearly_hours / 365) * days_between)  # Ensure positive accrual
+    # Other leave types don't accrue
+    else:
+        accrued_leave = 0.0
+    
+    # Get scheduled leave
+    response = xero_api_client.get("LeaveApplications")
+    applications = response.get("LeaveApplications", [])
     
     # Calculate scheduled leave
     response = xero_api_client.get("LeaveApplications")

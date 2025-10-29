@@ -189,6 +189,16 @@ def get_leave_summary(employee_id: str) -> dict:
     
     # Process current balances and get leave type mappings
     leave_type_mapping = {}  # Maps LeaveTypeID to LeaveName
+    
+    # Debug - print raw leave balances from Xero
+    print("\nRaw Leave Balances from Xero:")
+    print("-" * 40)
+    for balance in employee.get("LeaveBalances", []):
+        print(f"Leave Type: {balance.get('LeaveName')}")
+        print(f"Balance: {balance.get('NumberOfUnits')} hours")
+        print(f"Leave Type ID: {balance.get('LeaveTypeID')}")
+        print("-" * 20)
+    
     for balance in employee.get("LeaveBalances", []):
         leave_name = balance.get("LeaveName")
         if not leave_name:

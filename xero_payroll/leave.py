@@ -353,9 +353,10 @@ def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, 
     response = xero_api_client.get("LeaveApplications")
     applications = response.get("LeaveApplications", [])
     
-    # Calculate scheduled leave
-    response = xero_api_client.get("LeaveApplications")
-    applications = response.get("LeaveApplications", [])
+    # Add debug logging
+    print(f"\nDebug - Leave Balance Prediction:")
+    print(f"Current Balance: {current_balance:.2f} hours")
+    print(f"Accrued Leave: {accrued_leave:.2f} hours")
     
     for app in applications:
         if app.get("EmployeeID") != employee_id:
@@ -369,18 +370,25 @@ def predict_leave_balance(employee_id: str, leave_type: str, future_date: date, 
             timestamp = int(start_date_str.split('(')[1].split(')')[0].split('+')[0]) / 1000
             start_date = datetime.fromtimestamp(timestamp).date()
             
-            if start_date <= future_date:
-                # Sum up approved/processed leave periods
+            # Only count if the start date is in the future
+            if today < start_date <= future_date:
+                # Only count APPROVED or PROCESSED periods
                 leave_periods = app.get("LeavePeriods", [])
-                total_scheduled += sum(
-                    float(period.get("NumberOfUnits", 0.0))
-                    for period in leave_periods
-                    if period.get("LeavePeriodStatus") in {"APPROVED", "PROCESSED"}
-                )
+                valid_periods = [p for p in leave_periods 
+                               if p.get("LeavePeriodStatus") in {"APPROVED", "PROCESSED"}]
+                
+                if valid_periods:
+                    period_hours = sum(float(period.get("NumberOfUnits", 0.0)) 
+                                     for period in valid_periods)
+                    total_scheduled += period_hours
+                    print(f"Found scheduled leave: {period_hours} hours from {start_date}")
         except:
             continue
     
-    return current_balance + accrued_leave - total_scheduled
+    predicted = current_balance + accrued_leave - total_scheduled
+    print(f"Scheduled Leave: {total_scheduled:.2f} hours")
+    print(f"Predicted Balance: {predicted:.2f} hours")
+    return predicted
 
 def create_leave_request(employee_id: str, leave_type: str, start_date: str, end_date: str, description: str, hours: float):
     """Lodges a leave request for an employee."""

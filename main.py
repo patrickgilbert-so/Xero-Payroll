@@ -1,6 +1,8 @@
 # main.py
 
 import sys
+import json
+import logging
 from datetime import date, timedelta
 from xero_payroll.api import xero_api_client, create_xero_client
 from xero_payroll.leave import (
@@ -13,6 +15,86 @@ from xero_payroll.leave import (
     reject_leave_request,
     LEAVE_TYPES,
 )
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+def handle_webhook_payload(payload):
+    """
+    Process webhook payload and return appropriate response.
+    
+    Args:
+        payload (dict): The webhook payload containing event data
+        
+    Returns:
+        dict: Response data containing processed information
+    """
+    try:
+        logging.info(f"Processing webhook payload: {payload}")
+        
+        # Get the event type and relevant data
+        event_type = payload.get("eventType")
+        if not event_type:
+            raise ValueError("No eventType specified in payload")
+            
+        response_data = {"status": "success", "data": None}
+        
+        if event_type == "GetLeaveSummary":
+            # Handle leave summary request
+            employee_id = payload.get("employeeId")
+            if not employee_id:
+                raise ValueError("No employeeId specified for leave summary request")
+                
+            summary = get_leave_summary(employee_id)
+            response_data["data"] = summary
+            
+        elif event_type == "GetLeaveBalance":
+            # Handle leave balance request
+            employee_id = payload.get("employeeId")
+            leave_type = payload.get("leaveType")
+            if not employee_id or not leave_type:
+                raise ValueError("Missing employeeId or leaveType for leave balance request")
+                
+            balance = get_employee_leave_balance(employee_id, leave_type)
+            response_data["data"] = {"balance": balance}
+            
+        elif event_type == "PredictLeaveBalance":
+            # Handle leave prediction request
+            employee_id = payload.get("employeeId")
+            leave_type = payload.get("leaveType")
+            future_date = date.fromisoformat(payload.get("date")) if payload.get("date") else None
+            
+            if not all([employee_id, leave_type, future_date]):
+                raise ValueError("Missing required fields for leave prediction request")
+                
+            predicted = predict_leave_balance(employee_id, leave_type, future_date)
+            response_data["data"] = {"predicted_balance": predicted}
+            
+        elif event_type == "GetFutureScheduledLeave":
+            # Handle future scheduled leave request
+            employee_id = payload.get("employeeId")
+            leave_type = payload.get("leaveType")
+            
+            if not employee_id or not leave_type:
+                raise ValueError("Missing employeeId or leaveType for future scheduled leave request")
+                
+            scheduled_leave = get_future_scheduled_leave(employee_id, leave_type)
+            response_data["data"] = {"scheduled_leave": scheduled_leave}
+            
+        else:
+            raise ValueError(f"Unsupported event type: {event_type}")
+            
+        return response_data
+        
+    except Exception as e:
+        logging.error(f"Error processing webhook payload: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }
 
 def display_employee_list():
     """
@@ -168,4 +250,32 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Check if we have a webhook payload
+    if len(sys.argv) > 1:
+        try:
+            # Parse the webhook payload from command line argument
+            payload = json.loads(sys.argv[1])
+            
+            # Process the webhook payload
+            result = handle_webhook_payload(payload)
+            
+            # Print the result as JSON
+            print(json.dumps(result, indent=2))
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Error decoding webhook payload: {e}")
+            print(json.dumps({
+                "status": "error",
+                "error": f"Invalid JSON payload: {str(e)}"
+            }, indent=2))
+            sys.exit(1)
+        except Exception as e:
+            logging.error(f"Error processing request: {e}")
+            print(json.dumps({
+                "status": "error",
+                "error": str(e)
+            }, indent=2))
+            sys.exit(1)
+    else:
+        # No webhook payload, run in interactive mode
+        main()

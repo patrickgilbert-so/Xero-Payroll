@@ -9,7 +9,8 @@ from requests_oauthlib import OAuth2Session
 CLIENT_ID = "8125185E4CF74838A4269973EE475E7A"
 CLIENT_SECRET = "emoGiUHsdOUYI3QVDppe_PUcjO2fgv8EiLkL1rKZkOjLm-kT"
 REDIRECT_URI = "http://localhost:5000/callback"
-TOKEN_FILE = "xero_tokens.json"
+#TOKEN_FILE = "xero_tokens.json"
+TOKEN_FILE = "/home/ubuntu/webhook_magic/XeroInvoiceImport/xero_tokens.json"  # Path where tokens are saved
 SCOPE = [
     "openid",
     "profile",

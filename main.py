@@ -84,6 +84,19 @@ def handle_webhook_payload(payload):
             scheduled_leave = get_future_scheduled_leave(employee_id, leave_type)
             response_data["data"] = {"scheduled_leave": scheduled_leave}
             
+        elif event_type == "GetEmployeeList":
+            # Handle employee list request
+            employees = xero_api_client.list_employees()
+            response_data["data"] = {
+                "employees": [{
+                    "id": emp["EmployeeID"],
+                    "firstName": emp["FirstName"],
+                    "lastName": emp["LastName"],
+                    "status": emp["Status"],
+                    "email": emp.get("Email", "N/A")
+                } for emp in employees]
+            }
+            
         else:
             raise ValueError(f"Unsupported event type: {event_type}")
             

@@ -267,13 +267,14 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         try:
             # Parse the webhook payload from command line argument
+            logging.info("Received webhook payload")
             payload = json.loads(sys.argv[1])
-            
+            logging.info(F"payload={payload}")
             # Process the webhook payload
             result = handle_webhook_payload(payload)
             
             # Print the result as JSON
-            print(json.dumps(result, indent=2))
+            logging.info(json.dumps(result, indent=2))
             
         except json.JSONDecodeError as e:
             logging.error(f"Error decoding webhook payload: {e}")

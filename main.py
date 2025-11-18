@@ -263,6 +263,7 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.info("Checking for webhook payload")
     # Check if we have a webhook payload
     if len(sys.argv) > 1:
         try:

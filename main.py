@@ -16,11 +16,19 @@ from xero_payroll.leave import (
     LEAVE_TYPES,
 )
 
-# Set up logging
+# Set up logging - both console and file
+import os
+#log_file = os.path.join(os.path.dirname(__file__), "xero_payroll_webhook.log")
+# Setup shared logging
 logging.basicConfig(
+    #filename="/home/ubuntu/webhook_magic/webhook.log",
+    filename="webhook.log",
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format="%(asctime)s %(levelname)s: [Xero_Payroll] %(message)s"
 )
+
+
+logger = logging.getLogger(__name__)
 
 def handle_webhook_payload(payload):
     """
@@ -33,7 +41,7 @@ def handle_webhook_payload(payload):
         dict: Response data containing processed information
     """
     try:
-        logging.info(f"Processing webhook payload: {payload}")
+        logger.info(f"Processing webhook payload: {payload}")
         
         # Get the event type and relevant data
         event_type = payload.get("eventType")
@@ -103,7 +111,7 @@ def handle_webhook_payload(payload):
         return response_data
         
     except Exception as e:
-        logging.error(f"Error processing webhook payload: {e}")
+        logger.error(f"Error processing webhook payload: {e}", exc_info=True)
         return {
             "status": "error",
             "error": str(e)
@@ -263,34 +271,46 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.info("Checking for webhook payload")
+    logger.info("="*60)
+    logger.info("Xero Payroll webhook handler started")
+    logger.info(f"Number of arguments: {len(sys.argv)}")
+    if len(sys.argv) > 1:
+        logger.info(f"First argument (payload): {sys.argv[1][:100]}...")
+    logger.info("="*60)
+    
     # Check if we have a webhook payload
     if len(sys.argv) > 1:
         try:
             # Parse the webhook payload from command line argument
-            logging.info("Received webhook payload")
+            logger.info("Received webhook payload, parsing JSON...")
             payload = json.loads(sys.argv[1])
-            logging.info(F"payload={payload}")
+            logger.info(f"Payload decoded successfully: {payload}")
+            
             # Process the webhook payload
             result = handle_webhook_payload(payload)
             
             # Print the result as JSON
-            logging.info(json.dumps(result, indent=2))
+            json_output = json.dumps(result, indent=2)
+            print(json_output)
+            logger.info(f"Response sent: {json_output}")
             
         except json.JSONDecodeError as e:
-            logging.error(f"Error decoding webhook payload: {e}")
-            print(json.dumps({
+            logger.error(f"Error decoding webhook payload: {e}", exc_info=True)
+            error_response = {
                 "status": "error",
                 "error": f"Invalid JSON payload: {str(e)}"
-            }, indent=2))
+            }
+            print(json.dumps(error_response, indent=2))
             sys.exit(1)
         except Exception as e:
-            logging.error(f"Error processing request: {e}")
-            print(json.dumps({
+            logger.error(f"Error processing request: {e}", exc_info=True)
+            error_response = {
                 "status": "error",
                 "error": str(e)
-            }, indent=2))
+            }
+            print(json.dumps(error_response, indent=2))
             sys.exit(1)
     else:
+        logger.info("No webhook payload provided, running in interactive mode")
         # No webhook payload, run in interactive mode
         main()

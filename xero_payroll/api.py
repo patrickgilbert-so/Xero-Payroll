@@ -9,13 +9,21 @@ from requests_oauthlib import OAuth2Session
 CLIENT_ID = "8125185E4CF74838A4269973EE475E7A"
 CLIENT_SECRET = "emoGiUHsdOUYI3QVDppe_PUcjO2fgv8EiLkL1rKZkOjLm-kT"
 REDIRECT_URI = "http://localhost:5000/callback"
-TOKEN_FILE = "xero_tokens.json"
-# Set TOKEN_FILE based on the workspace root
-TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "xero_tokens.json")
+
+# Set TOKEN_FILE based on environment (production vs development)
+if os.path.exists("/home/ubuntu/webhook_magic"):
+    # Production: Ubuntu server - separate token file for Payroll API (different scopes than Invoicing)
+    TOKEN_FILE = "/home/ubuntu/webhook_magic/Xero-Payroll/xero_tokens.json"
+else:
+    # Development: Local Windows machine
+    TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "xero_tokens.json")
+
 SCOPE = [
     "openid",
     "profile",
     "email",
+    "accounting.transactions",
+    "offline_access",
     "payroll.employees",
     "payroll.timesheets",
     "payroll.settings",
@@ -57,6 +65,17 @@ class XeroAPI:
             
         if not self.token:
             raise ValueError("No token available. Please provide an initial token.")
+        
+        # Check if token is expired and refresh if needed
+        import time
+        if self.token.get("expires_at") and self.token.get("expires_at") < time.time():
+            print(f"Token is expired (expires_at: {self.token.get('expires_at')}, now: {time.time()}), attempting refresh...")
+            try:
+                self.token = self._refresh_token_internal()
+            except Exception as e:
+                print(f"Warning: Token refresh failed, but will attempt to use existing token anyway")
+                print(f"If API calls fail, you'll need to re-authorize the application")
+                # Don't raise here - let the OAuth2Session handle auto-refresh on next request
             
         auto_refresh_kwargs = {
             "client_id": self.client_id,
@@ -98,6 +117,31 @@ class XeroAPI:
         )
         self.save_token(self.token)
         return self.token
+
+    def _refresh_token_internal(self):
+        """Internal method to refresh token before OAuth session is fully set up."""
+        try:
+            import requests
+            print(f"Attempting to refresh token with refresh_token: {self.token.get('refresh_token', 'MISSING')[:20]}...")
+            response = requests.post(
+                TOKEN_URL,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self.token.get("refresh_token"),
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                }
+            )
+            print(f"Token refresh response status: {response.status_code}")
+            print(f"Token refresh response body: {response.text}")
+            response.raise_for_status()
+            new_token = response.json()
+            self.save_token(new_token)
+            print("Token refreshed successfully during initialization")
+            return new_token
+        except Exception as e:
+            print(f"Failed to refresh token during initialization: {e}")
+            raise
 
     def refresh_token(self):
         """Refreshes the access token."""
@@ -255,7 +299,17 @@ def create_xero_client(initial_token=None, tenant_id=None):
 # Default instance - will try to load token from file
 xero_api_client = None
 try:
+    print(f"Attempting to initialize Xero API client from: {TOKEN_FILE}")
+    print(f"Token file exists: {os.path.exists(TOKEN_FILE)}")
     xero_api_client = create_xero_client()
-except ValueError:
-    # Don't create the client if no token is available
-    pass
+    print(f"✓ Xero API client initialized successfully")
+except ValueError as e:
+    print(f"❌ ValueError: Xero API client not initialized - {e}")
+    print(f"Token file location: {TOKEN_FILE}")
+    print(f"Token file exists: {os.path.exists(TOKEN_FILE)}")
+except Exception as e:
+    print(f"❌ Error initializing Xero API client: {e}")
+    print(f"Token file location: {TOKEN_FILE}")
+    print(f"Token file exists: {os.path.exists(TOKEN_FILE)}")
+    import traceback
+    traceback.print_exc()

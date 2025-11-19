@@ -35,27 +35,47 @@ def handle_webhook_payload(payload):
     Process webhook payload and return appropriate response.
     
     Args:
-        payload (dict): The webhook payload containing event data
+        payload (dict or list): The webhook payload containing event data
         
     Returns:
         dict: Response data containing processed information
     """
     try:
+        # Check if API client is initialized
+        if not xero_api_client:
+            raise ValueError("Xero API client not initialized. Token file may not exist or be invalid.")
+        
         logger.info(f"Processing webhook payload: {payload}")
         
+        # Handle array of events (extract first event)
+        if isinstance(payload, list):
+            if len(payload) == 0:
+                raise ValueError("Empty payload list received")
+            logger.info(f"Payload is a list, extracting first event from {len(payload)} events")
+            payload = payload[0]
+        
         # Get the event type and relevant data
-        event_type = payload.get("eventType")
+        event_type = payload.get("status")
         if not event_type:
-            raise ValueError("No eventType specified in payload")
+            raise ValueError("No status/eventType specified in payload")
             
         response_data = {"status": "success", "data": None}
         
-        if event_type == "GetLeaveSummary":
+        if event_type == "Get Leave Summary":
             # Handle leave summary request
-            employee_id = payload.get("employeeId")
+            # Try to get employeeId from multiple possible locations
+            employee_id = (
+                payload.get("employeeId") or 
+                payload.get("employee_id") or 
+                payload.get("customField:employeeId") or
+                "b5c4187a-1d2d-4712-8764-6bd01ef4af7d" # For testing purposes
+                #payload.get("taskId")  # Fallback to taskId if no employee ID
+            )
+            
             if not employee_id:
                 raise ValueError("No employeeId specified for leave summary request")
                 
+            logger.info(f"Getting leave summary for employee: {employee_id}")
             summary = get_leave_summary(employee_id)
             response_data["data"] = summary
             

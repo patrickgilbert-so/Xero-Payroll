@@ -6,8 +6,8 @@ import requests
 from requests_oauthlib import OAuth2Session
 
 # --- Configuration ---
-CLIENT_ID = "8125185E4CF74838A4269973EE475E7A"
-CLIENT_SECRET = "emoGiUHsdOUYI3QVDppe_PUcjO2fgv8EiLkL1rKZkOjLm-kT"
+CLIENT_ID = "4660E56A39F34A2C8E413794795D48A8"
+CLIENT_SECRET = "RPC7BlkkMpyttd_aD64lDayKwiGePvOmS1MdxagXZqrD9QP7"
 REDIRECT_URI = "http://localhost:5000/callback"
 
 # Set TOKEN_FILE based on environment (production vs development)

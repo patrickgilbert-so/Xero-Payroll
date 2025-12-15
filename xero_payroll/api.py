@@ -1,9 +1,10 @@
 # api.py
-
+import time
 import os
 import json
 import requests
 from requests_oauthlib import OAuth2Session
+import pytz
 
 # --- Configuration ---
 CLIENT_ID = "4660E56A39F34A2C8E413794795D48A8"
@@ -35,6 +36,7 @@ PAYROLL_AU_URL = "https://api.xero.com/payroll.xro/1.0"
 AUTHORIZATION_URL = "https://login.xero.com/identity/connect/authorize"
 TOKEN_URL = "https://identity.xero.com/connect/token"
 
+tenant_id = "993a65df-7298-40d2-8cdd-ca4a71f09e26"
 
 class XeroAPI:
     """A wrapper for the Xero API."""
@@ -91,15 +93,20 @@ class XeroAPI:
         )
 
     def load_token(self):
-        """Loads token from file."""
         try:
             with open(self.token_file, "r") as f:
-                return json.load(f)
+                tok = json.load(f)
+            # ensure expires_at exists if only expires_in is present
+            if "expires_at" not in tok and "expires_in" in tok:
+                tok["expires_at"] = int(time.time()) + int(tok["expires_in"])
+            return tok
         except (FileNotFoundError, json.JSONDecodeError):
             return None
-
+    
     def save_token(self, token):
-        """Saves token to file."""
+        # normalise expires_at for future checks
+        if "expires_at" not in token and "expires_in" in token:
+            token["expires_at"] = int(time.time()) + int(token["expires_in"])
         with open(self.token_file, "w") as f:
             json.dump(token, f)
         self.token = token
@@ -125,19 +132,20 @@ class XeroAPI:
             print(f"Attempting to refresh token with refresh_token: {self.token.get('refresh_token', 'MISSING')[:20]}...")
             response = requests.post(
                 TOKEN_URL,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},  # add this
                 data={
                     "grant_type": "refresh_token",
                     "refresh_token": self.token.get("refresh_token"),
                     "client_id": self.client_id,
                     "client_secret": self.client_secret,
-                }
+                },
+                timeout=30,
             )
-            print(f"Token refresh response status: {response.status_code}")
-            print(f"Token refresh response body: {response.text}")
             response.raise_for_status()
             new_token = response.json()
+            if "expires_at" not in new_token and "expires_in" in new_token:
+                new_token["expires_at"] = int(time.time()) + int(new_token["expires_in"])
             self.save_token(new_token)
-            print("Token refreshed successfully during initialization")
             return new_token
         except Exception as e:
             print(f"Failed to refresh token during initialization: {e}")
@@ -147,7 +155,11 @@ class XeroAPI:
         """Refreshes the access token."""
         try:
             print("Refreshing access token...")
-            self.token = self.oauth.refresh_token(TOKEN_URL, client_id=self.client_id, client_secret=self.client_secret)
+            self.token = self.oauth.refresh_token(
+                TOKEN_URL, client_id=self.client_id, client_secret=self.client_secret
+            )
+            if "expires_at" not in self.token and "expires_in" in self.token:
+                self.token["expires_at"] = int(time.time()) + int(self.token["expires_in"])
             self.save_token(self.token)
             print("Token refreshed successfully")
             
@@ -167,6 +179,7 @@ class XeroAPI:
 
     def get_tenant_id(self):
         """Retrieves the tenant ID required for API calls."""
+        return "993a65df-7298-40d2-8cdd-ca4a71f09e26"
         if not self.tenant_id:
             try:
                 response = self.oauth.get("https://api.xero.com/connections")
@@ -190,57 +203,46 @@ class XeroAPI:
         return self.tenant_id
 
     def get(self, endpoint, params=None):
-        """Makes a GET request to the Xero API."""
         if not self.token:
-            raise ValueError("No token available. Please ensure you have provided valid tokens.")
-            
+            raise ValueError("No token available.")
         headers = {
-            "Authorization": f"Bearer {self.token['access_token']}",
-            "Xero-Tenant-Id": self.get_tenant_id(),
+            "xero-tenant-id": self.get_tenant_id(),
             "Accept": "application/json",
         }
-        
         url = f"{PAYROLL_AU_URL}/{endpoint}"
-        #print(f"Making GET request to: {url}")
-        #print(f"Headers: {headers}")
-        
-        try:
-            response = self.oauth.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            #print(f"Response status: {response.status_code}")
-            #print(f"Response data: {json.dumps(data, indent=2)}")
-            return data
-        except requests.exceptions.RequestException as e:
-            print(f"Error making request: {str(e)}")
-            if hasattr(e.response, 'text'):
-                print(f"Error response: {e.response.text}")
-            raise
+        r = self.oauth.get(url, headers=headers, params=params, timeout=30)
+        if r.status_code == 401:
+            # token just expired or was revoked; refresh and retry once
+            try:
+                print(f"[Xero] 401 body: {getattr(r, 'text', '')}")
+            except Exception:
+                pass
+            self.refresh_token()
+            r = self.oauth.get(url, headers=headers, params=params, timeout=30)
+        r.raise_for_status()
+        return r.json()
 
     def post(self, endpoint, data):
-        """Makes a POST request to the Xero API."""
         headers = {
-            "Authorization": f"Bearer {self.token['access_token']}",
-            "Xero-Tenant-Id": self.get_tenant_id(),
+            "xero-tenant-id": self.get_tenant_id(),
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        response = self.oauth.post(f"{PAYROLL_AU_URL}/{endpoint}", headers=headers, json=data)
-        response.raise_for_status()
-        return response.json()
+        r = self.oauth.post(f"{PAYROLL_AU_URL}/{endpoint}", headers=headers, json=data, timeout=30)
+        r.raise_for_status()
+        return r.json()
 
+    # --- replace your put() with this ---
     def put(self, endpoint, data):
-        """Makes a PUT request to the Xero API."""
         headers = {
-            "Authorization": f"Bearer {self.token['access_token']}",
-            "Xero-Tenant-Id": self.get_tenant_id(),
+            "xero-tenant-id": self.get_tenant_id(),
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        response = self.oauth.put(f"{PAYROLL_AU_URL}/{endpoint}", headers=headers, json=data)
-        response.raise_for_status()
-        return response.json()
-
+        r = self.oauth.put(f"{PAYROLL_AU_URL}/{endpoint}", headers=headers, json=data, timeout=30)
+        r.raise_for_status()
+        return r.json()
+    
     def list_employees(self):
         """
         Retrieves a list of all employees from Xero Payroll.
@@ -277,7 +279,7 @@ class XeroAPI:
 
 
 # Function to create the API client instance
-def create_xero_client(initial_token=None, tenant_id=None):
+def create_xero_client(initial_token=None, tenant_id="993a65df-7298-40d2-8cdd-ca4a71f09e26"):
     """
     Creates a new XeroAPI client instance.
     

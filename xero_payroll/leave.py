@@ -186,7 +186,7 @@ def get_leave_summary(employee_id: str) -> dict:
         "future_leave_requests": [],
         "future_balances": {}
     }
-    
+    #logging.info(f"\nGenerating leave summary for employee: {employee_name} (ID: {employee_id})")
     # Process current balances and get leave type mappings
     leave_type_mapping = {}  # Maps LeaveTypeID to LeaveName
     

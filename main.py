@@ -119,7 +119,75 @@ def make_WRIKE_session() -> requests.Session:
 
 WRIKE_session = make_WRIKE_session()
 
+CIT_TYPE_ID = "IEAF5D2JPIACSO3J"
+PERSON_ID_CF_ID = "IEAF5D2JJUAGXSTI"
+XERO_EMPLOYEE_CF_ID = "IEAF5D2JJUAJ5DXC"
 
+
+def get_Xero_employee_id_from_Wrike(person_id: str) -> Optional[str]:
+    """
+    Finds the Wrike CIT (custom item type = CIT_TYPE_ID) where custom field PERSON_ID_CF_ID == person_id,
+    then returns the value from custom field XERO_EMPLOYEE_CF_ID.
+
+    Returns:
+        str  -> Xero employee id
+        None -> not found / blank
+    Raises:
+        RuntimeError / ValueError on API errors or ambiguous duplicates
+    """
+
+    # Wrike's /tasks filter for a custom field is commonly expressed as:
+    # customField={id:'<CF_ID>',value:'<VALUE>'}
+    # (Note: this is NOT strict JSON; Wrike examples often use single quotes.)
+    custom_field_filter = f"{{id:'{PERSON_ID_CF_ID}',value:'{str(person_id)}'}}"
+
+    params = {
+        "customField": custom_field_filter,
+        "plainTextCustomFields": "true",
+        # Ensure we get the fields we need back
+        "fields": json.dumps(["customFields", "customItemTypeId"]),
+    }
+
+    resp = WRIKE_get("/tasks", params=params)
+    logging.info(f"[get_Xero_employee_id_from_Wrike] WRIKE /tasks response: {resp.status_code}, {resp.text}")   
+
+    if not resp.ok:
+        # Include response text to make debugging faster
+        raise RuntimeError(f"Wrike /tasks query failed ({resp.status_code}): {resp.text}")
+
+    payload = resp.json() if resp.text else {}
+    tasks: List[Dict[str, Any]] = payload.get("data") or []
+
+    if not tasks:
+        return None
+
+    # Filter to the intended CIT type
+    cit_tasks = [t for t in tasks if t.get("customItemTypeId") == CIT_TYPE_ID]
+    if not cit_tasks:
+        return None
+
+    if len(cit_tasks) > 1:
+        raise ValueError(
+            f"Multiple CIT tasks found for person_id={person_id} (type={CIT_TYPE_ID}): "
+            f"{[t.get('id') for t in cit_tasks]}"
+        )
+
+    task = cit_tasks[0]
+    custom_fields = task.get("customFields") or []
+
+    xero_cf = next((cf for cf in custom_fields if cf.get("id") == XERO_EMPLOYEE_CF_ID), None)
+    if not xero_cf:
+        return None
+
+    value = xero_cf.get("value")
+    if value is None:
+        return None
+
+    # Some CF types can come back list-valued; normalize.
+    if isinstance(value, list):
+        value = value[0] if value else None
+
+    return str(value).strip() or None
 
 # ========= AUTH HELPERS =========
 def WRIKE_auth_headers(access_token: str) -> dict:
@@ -259,7 +327,7 @@ def get_Wrike_Task(taskId):
         root=None
     else:
         root = response.json()
-        logging.debug(f"[get_Wrike_Task] json response (root)={root}")
+        logging.info(f"[get_Wrike_Task] returning task details (root)={root}")
         #if root.get('data') and len(root['data']) > 0:
         #    found_id = root['data'][0]['id']
         #else:
@@ -470,11 +538,17 @@ def handle_webhook_payload(payload):
                 normalize_cf_value(leave_type, max_len=200),
                 normalize_cf_value(job_history, max_len=1500),
             )
-            if event_type == "Get Leave Summary":
+            # now need to find XERO employee ID from Wrike custom fields
 
-                
-                # Handle leave summary request
-                # Try to get employeeId from multiple possible locations
+            if person_name:
+                logging.info(f"🚀 [handle_webhook_payload] looking up Xero_employee_id for wrike_id={person_name}"      )
+                Xero_employee_id = get_Xero_employee_id_from_Wrike(person_name)
+
+            logging.info(f"🚀 [handle_webhook_payload] resolved Xero_employee_id={Xero_employee_id} for wrike_id={person_name}"  )
+
+            if Xero_employee_id:
+                employee_id = Xero_employee_id
+            else:
                 employee_id = (
                     payload.get("employeeId") or 
                     payload.get("employee_id") or 
@@ -482,6 +556,12 @@ def handle_webhook_payload(payload):
                     "b5c4187a-1d2d-4712-8764-6bd01ef4af7d" # For testing purposes
                     #payload.get("taskId")  # Fallback to taskId if no employee ID
                 )
+
+            if event_type == "Get Leave Summary":
+
+                
+                # Handle leave summary request
+                # Try to get employeeId from multiple possible locations
                 
                 if not employee_id:
                     raise ValueError("No employeeId specified for leave summary request")
@@ -500,14 +580,6 @@ def handle_webhook_payload(payload):
             elif event_type == "Get Leave Balance":
                 # Handle leave balance request
 
-                # Try to get employeeId from multiple possible locations
-                employee_id = (
-                    payload.get("employeeId") or 
-                    payload.get("employee_id") or 
-                    payload.get("customField:employeeId") or
-                    "b5c4187a-1d2d-4712-8764-6bd01ef4af7d" # For testing purposes
-                    #payload.get("taskId")  # Fallback to taskId if no employee ID
-                )
                 
                 if not employee_id:
                     raise ValueError("No employeeId specified for leave summary request")
@@ -525,13 +597,6 @@ def handle_webhook_payload(payload):
                 
             elif event_type == "Predict Leave Balance at Date":
                 # Handle leave prediction request
-                employee_id = (
-                    payload.get("employeeId") or 
-                    payload.get("employee_id") or 
-                    payload.get("customField:employeeId") or
-                    "b5c4187a-1d2d-4712-8764-6bd01ef4af7d" # For testing purposes
-                    #payload.get("taskId")  # Fallback to taskId if no employee ID
-                )
 
                 leave_type = payload.get("leaveType")
 
@@ -552,13 +617,6 @@ def handle_webhook_payload(payload):
                 
             elif event_type == "Get Future Scheduled Leave":
                 # Handle future scheduled leave request
-                employee_id = (
-                    payload.get("employeeId") or 
-                    payload.get("employee_id") or 
-                    payload.get("customField:employeeId") or
-                    "b5c4187a-1d2d-4712-8764-6bd01ef4af7d" # For testing purposes
-                    #payload.get("taskId")  # Fallback to taskId if no employee ID
-                )
 
                 leave_type = payload.get("leaveType")
                 if not leave_type:
@@ -810,7 +868,7 @@ if __name__ == "__main__":
 
 
     logger.info("="*60)
-    logger.info("Xero Payroll webhook handler started")
+    logger.info("\n\n***************************** Xero Payroll webhook handler started *****************************\n\n")
     logger.info(f"Number of arguments: {len(sys.argv)}")
     if len(sys.argv) > 1:
         logger.info(f"First argument (payload): {sys.argv[1][:100]}...")

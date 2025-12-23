@@ -455,41 +455,40 @@ def handle_webhook_payload(payload):
     try:
         # Check if API client is initialized
         if not xero_api_client:
-            raise ValueError("Xero API client not initialized. Token file may not exist or be invalid.")
+            raise ValueError("[handle_webhook_payload] Xero API client not initialized. Token file may not exist or be invalid.")
         
-        logger.info(f"Processing webhook payload: {payload}")
+        logger.info(f"[handle_webhook_payload] Processing webhook payload: {payload}")
         
         # Handle array of events (extract first event)
         if isinstance(payload, list):
             if len(payload) == 0:
-                raise ValueError("Empty payload list received")
-            logger.info(f"Payload is a list, extracting first event from {len(payload)} events")
+                raise ValueError("[handle_webhook_payload] Empty payload list received")
+            logger.info(f"[handle_webhook_payload] Payload is a list, extracting first event from {len(payload)} events")
             payload = payload[0]
         
         # Get the event type and relevant data
         event_type = payload.get("status")
         if not event_type:
-            raise ValueError("No status/eventType specified in payload")
+            raise ValueError("[handle_webhook_payload] No status/eventType specified in payload")
             
         response_data = {"status": "success", "data": None}
         
         if event_type == "Idle":
             # No action needed for idle events
-            logger.info("Received Idle event - no action taken")
-            return response_data
+            logger.info("[handle_webhook_payload] Received Idle event - no action taken")
+            exit(0)
         elif event_type == "Completed":
             # No action needed for completed events
-            logger.info("Received Completed event - no action taken")
-            return response_data
+            logger.info("[handle_webhook_payload] Received Completed event - no action taken")
+            exit(0)
         elif event_type == "Automation Running":
             # No action needed for completed events
-            logger.info("Received Automation Running event - no action taken")
-            return response_data
+            logger.info("[handle_webhook_payload] Received Automation Running event - no action taken")
+            exit(0)
         elif event_type == "Error":
             # No action needed for completed events
-            logger.info("Received Error event - no action taken")
-            return response_data
-
+            logger.info("[handle_webhook_payload] Received Error event - no action taken")
+            exit(0)
         else:
             response=get_Wrike_Task(bot_task_id)
             custom_fields = response['data'][0]['customFields']
@@ -532,7 +531,7 @@ def handle_webhook_payload(payload):
             #logging.info(f"🚀 [handle_webhook_payload] extracted custom fields: person_name={person_name}, target_date={target_date}, leave_type={leave_type}, job_history={job_history}")
             # Also log the extracted values in readable form
             logging.info(
-                "🚀 extracted custom fields: person_name=%s, target_date=%s, leave_type=%s, job_history=\n%s",
+                "[handle_webhook_payload] 🚀 extracted custom fields: person_name=%s, target_date=%s, leave_type=%s, job_history=\n%s",
                 normalize_cf_value(person_name, max_len=200),
                 normalize_cf_value(target_date, max_len=200),
                 normalize_cf_value(leave_type, max_len=200),
@@ -566,7 +565,7 @@ def handle_webhook_payload(payload):
                 if not employee_id:
                     raise ValueError("No employeeId specified for leave summary request")
                     
-                logger.info(f"Getting leave summary for employee: {employee_id}")
+                logger.info(f"[handle_webhook_payload] Getting leave summary for employee: {employee_id}")
                 job_summary=job_summary+f"\nProcessing Get Leave Summary for employee {employee_id}"
                 #job_summary=wrike_text_cf_value(job_summary)
                 bot_response=update_Wrike_bot(bot_task_id, status_automation_running, job_summary)
@@ -587,10 +586,10 @@ def handle_webhook_payload(payload):
                 
                 leave_type = payload.get("leaveType")
                 if not leave_type:
-                    logger.info("No leaveType specified for leave balance request - defaulting to annual leave")
+                    logger.info("[handle_webhook_payload] No leaveType specified for leave balance request - defaulting to annual leave")
                     leave_type = "Annual"
                 if not employee_id or not leave_type:
-                    raise ValueError("Missing employeeId or leaveType for leave balance request")
+                    raise ValueError("[handle_webhook_payload] Missing employeeId or leaveType for leave balance request")
                     
                 balance = get_employee_leave_balance(employee_id, leave_type)
                 response_data["data"] = {"balance": balance}
@@ -601,7 +600,7 @@ def handle_webhook_payload(payload):
                 leave_type = payload.get("leaveType")
 
                 if not leave_type:
-                    logger.info("No leaveType specified for leave balance request - defaulting to annual leave")
+                    logger.info("[handle_webhook_payload] No leaveType specified for leave balance request - defaulting to annual leave")
                     leave_type = "Annual"
 
                 future_date = date.fromisoformat(payload.get("date")) if payload.get("date") else None
@@ -620,11 +619,11 @@ def handle_webhook_payload(payload):
 
                 leave_type = payload.get("leaveType")
                 if not leave_type:
-                    logger.info("No leaveType specified for leave balance request - defaulting to annual leave")
+                    logger.info("[handle_webhook_payload] No leaveType specified for leave balance request - defaulting to annual leave")
                     leave_type = "Annual"
                 
                 if not employee_id or not leave_type:
-                    raise ValueError("Missing employeeId or leaveType for future scheduled leave request")
+                    raise ValueError("[handle_webhook_payload] Missing employeeId or leaveType for future scheduled leave request")
                     
                 scheduled_leave = get_future_scheduled_leave(employee_id, leave_type)
                 response_data["data"] = {"scheduled_leave": scheduled_leave}
@@ -644,7 +643,7 @@ def handle_webhook_payload(payload):
                 
             else:
                 bot_response=update_Wrike_bot(bot_task_id, status_error, f"Unsupported event type: {event_type}")
-                raise ValueError(f"Unsupported event type: {event_type}")
+                raise ValueError(f"[handle_webhook_payload] Unsupported event type: {event_type}")
 
         # update the bot task with status
         # Set Melbourne timezone
@@ -654,7 +653,7 @@ def handle_webhook_payload(payload):
         return response_data
         
     except Exception as e:
-        logger.error(f"Error processing webhook payload: {e}", exc_info=True)
+        logger.error(f"[handle_webhook_payload] Error processing webhook payload: {e}", exc_info=True)
         bot_response=update_Wrike_bot(bot_task_id, status_error, job_summary+f"\nError: {str(e)}")
         return {
             "status": "error",
@@ -826,7 +825,7 @@ def update_Wrike_bot(Bot_Task_ID, newStatus, New_Description):
 
 
 
-    logging.info("Updating Job History")
+    logging.info("[update_Wrike_bot] Updating Job History")
     job_history=f'{New_Description}\n\n{JOB_HISTORY_GLOBAL}'
     job_history = job_history[:1000]
     New_Description=New_Description[:1000]
@@ -844,7 +843,7 @@ def update_Wrike_bot(Bot_Task_ID, newStatus, New_Description):
     }
 
     response = WRIKE_request("PUT", f"/tasks/{Bot_Task_ID}", params=params)
-    logging.info("Updating Wrike Bot Task ID %s to status %s", Bot_Task_ID, newStatus)
+    logging.info("[update_Wrike_bot] Updating Wrike Bot Task ID %s to status %s", Bot_Task_ID, newStatus)
 
     #last job status field
     #WRIKE_URL = f'https://www.wrike.com/api/v4/tasks/{Bot_Task_ID}?customFields=[{{"id":"IEAF5D2JJUAIEGRD","value":"{New_Description}"}}]&customStatus={newStatus}'
@@ -859,8 +858,8 @@ def update_Wrike_bot(Bot_Task_ID, newStatus, New_Description):
     #logging.debug(f"Response to {WRIKE_URL} is {response}")
 
     if response.status_code != 200:
-        logging.error(f"Error Updating Bot task id {Bot_Task_ID} to status {newStatus}")
-        logging.error(f"Response: {response}")
+        logging.error(f"[update_Wrike_bot] Error Updating Bot task id {Bot_Task_ID} to status {newStatus}")
+        logging.error(f"[update_Wrike_bot] Response: {response}")
         sys.exit(1)
 
 
@@ -902,8 +901,10 @@ if __name__ == "__main__":
             
             # Print the result as JSON
             json_output = json.dumps(result, indent=2)
-            print(json_output)
-            logger.info(f"Response sent: {json_output}")
+            #print(json_output)
+            logger.info(f"Result: {json_output}")
+
+            #TODO: update bot task with result
 
             
 
@@ -927,7 +928,7 @@ if __name__ == "__main__":
             bot_response=update_Wrike_bot(bot_task_id, status_error, json.dumps(error_response, indent=2))
             sys.exit(1)
     else:
-        logger.info("No webhook payload provided, running in interactive mode")
+        logger.info("No webhook payload provided, skipping processing.")
         
         # No webhook payload, run in interactive mode
-        main()
+        # main()
